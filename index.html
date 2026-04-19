@@ -352,15 +352,71 @@
     /* Manager filter */
     .filter-row { display: flex; gap: .45rem; margin-bottom: .7rem; flex-wrap: wrap; }
     #roomFilter, #mgSearch {
-      background: rgba(255,255,255,.05); border: 1px solid var(--glass-border);
+      background: #1e293b; border: 1px solid var(--glass-border);
       border-radius: 10px; padding: .5rem .8rem;
       color: white; font-family: inherit; font-size: .86rem; outline: none;
+      -webkit-appearance: none; appearance: none;
     }
-    #roomFilter { flex: 1; min-width: 110px; }
+    #roomFilter { flex: 1; min-width: 110px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right .7rem center;
+      padding-right: 2rem;
+    }
+    #roomFilter option { background: #1e293b; color: white; }
     #mgSearch   { flex: 2; min-width: 140px; }
     #roomFilter:focus, #mgSearch:focus {
       border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99,102,241,.12);
     }
+    /* Clickable manager rows */
+    .mg-row { cursor: pointer; transition: background .15s, border-color .15s; }
+    .mg-row:hover { background: rgba(99,102,241,.18); border-color: rgba(99,102,241,.4); }
+    .mg-row:active { background: rgba(99,102,241,.3); }
+
+    /* ── Asset Detail Panel ── */
+    #detailPanel {
+      display: none; position: fixed; inset: 0;
+      background: var(--bg-dark); z-index: 600;
+      overflow-y: auto; animation: fadeIn .2s ease;
+    }
+    .detail-header {
+      padding: 1rem 1.2rem;
+      display: flex; align-items: center; gap: .8rem;
+      background: rgba(15,23,42,.92); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--glass-border);
+      position: sticky; top: 0; z-index: 10;
+    }
+    .btn-back {
+      background: rgba(255,255,255,.08); border: 1px solid var(--glass-border);
+      border-radius: 50%; width: 34px; height: 34px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: white; font-size: 1.1rem;
+    }
+    .btn-back:hover { background: rgba(255,255,255,.2); }
+    .detail-title { flex: 1; min-width: 0; }
+    .detail-title h3 { margin: 0; font-size: 1rem; font-weight: 700;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .detail-title p  { margin: .1rem 0 0; font-size: .75rem; color: var(--text-muted); }
+    .detail-body { padding: 1rem; max-width: 640px; margin: 0 auto; }
+    .asset-item {
+      background: var(--card-bg); border: 1px solid var(--glass-border);
+      border-radius: 12px; padding: .75rem 1rem;
+      display: flex; align-items: flex-start; gap: .75rem; margin-bottom: .5rem;
+    }
+    .asset-idx {
+      flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+      background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .7rem; font-weight: 700; color: #f87171;
+    }
+    .asset-info { flex: 1; min-width: 0; }
+    .asset-bc { font-family: monospace; font-size: .82rem; color: var(--primary);
+      background: rgba(0,0,0,.25); display: inline-block;
+      padding: .1rem .45rem; border-radius: 5px; margin-bottom: .2rem; }
+    .asset-nm { font-size: .88rem; font-weight: 600; line-height: 1.35; }
+    .detail-empty {
+      text-align: center; padding: 3rem 1rem; color: var(--text-muted);
+    }
+    .detail-empty .big-icon { font-size: 2.5rem; margin-bottom: .5rem; }
 
     /* Manager rows */
     .mg-list { display: flex; flex-direction: column; gap: .45rem; }
@@ -419,6 +475,23 @@
     <div class="dash-body" id="dashBody">
       <div style="text-align:center;padding:3rem;color:var(--text-muted)">Đang tải dữ liệu…</div>
     </div>
+  </div>
+
+  <!-- ════ MANAGER ASSET DETAIL PANEL ════ -->
+  <div id="detailPanel">
+    <div class="detail-header">
+      <button class="btn-back" onclick="closeDetail()">←</button>
+      <div class="detail-title">
+        <h3 id="detailName">Người quản lý</h3>
+        <p id="detailSub">Tài sản chưa kiểm</p>
+      </div>
+    </div>
+    <div class="detail-body" id="detailBody">
+      <div style="text-align:center;padding:3rem;color:var(--text-muted)">Đang tải…</div>
+    </div>
+  </div>
+
+  <!-- (dashPanel closing tag moved up) -->
   </div>
 
   <header style="position:relative">
@@ -907,8 +980,10 @@
       const initial  = m.name ? m.name.split(' ').pop().charAt(0) : '?';
       const pctCls   = m.pct >= 80 ? 'pct-done' : m.pct >= 40 ? 'pct-mid' : 'pct-low';
       const barColor = m.pct >= 80 ? '#10b981' : m.pct >= 40 ? '#facc15' : '#ef4444';
+      const escapedName = m.name.replace(/'/g, "\\'");
       html += `
-      <div class="mg-row" data-room="${(m.room||'').toLowerCase()}" data-name="${m.name.toLowerCase()}">
+      <div class="mg-row" data-room="${(m.room||'').toLowerCase()}" data-name="${m.name.toLowerCase()}"
+           onclick="openManagerDetail('${escapedName}','${m.room}',${m.total - m.checked})">
         <div class="mg-avatar">${initial}</div>
         <div class="mg-info">
           <div class="mg-name">${m.name || '(Chưa có tên)'}</div>
@@ -943,6 +1018,60 @@
       const matchName = !search  || row.dataset.name.includes(search);
       row.style.display = (matchRoom && matchName) ? '' : 'none';
     });
+  }
+
+  // ── Manager Asset Detail ──
+  function openManagerDetail(managerName, roomName, uncheckedCount) {
+    document.getElementById('detailPanel').style.display = 'block';
+    document.getElementById('detailName').textContent = managerName;
+    document.getElementById('detailSub').textContent =
+      roomName + ' · ' + uncheckedCount + ' tài sản chưa kiểm';
+    document.getElementById('detailBody').innerHTML =
+      '<div style="text-align:center;padding:3rem;color:var(--text-muted)">⏳ Đang tải…</div>';
+
+    callGAS({ action: 'managerAssets', manager: managerName }, (res) => {
+      if (!res || !res.success) {
+        document.getElementById('detailBody').innerHTML =
+          '<div style="text-align:center;padding:2rem;color:#f87171">❌ ' +
+          (res && res.error ? res.error : 'Lỗi kết nối') + '</div>';
+        return;
+      }
+      renderManagerDetail(res);
+    });
+  }
+
+  function closeDetail() {
+    document.getElementById('detailPanel').style.display = 'none';
+  }
+
+  function renderManagerDetail(res) {
+    const body = document.getElementById('detailBody');
+    document.getElementById('detailSub').textContent =
+      (res.assets.length > 0
+        ? res.assets.length + ' tài sản chưa kiểm'
+        : 'Đã kiểm hết!');
+
+    if (res.assets.length === 0) {
+      body.innerHTML = `
+        <div class="detail-empty">
+          <div class="big-icon">✅</div>
+          <p>Người quản lý này đã kiểm tra hết tài sản!</p>
+        </div>`;
+      return;
+    }
+
+    let html = '';
+    res.assets.forEach((a, idx) => {
+      html += `
+      <div class="asset-item">
+        <div class="asset-idx">${idx + 1}</div>
+        <div class="asset-info">
+          <div class="asset-bc">${a.barcode}</div>
+          <div class="asset-nm">${a.assetName || '(Chưa có tên tài sản)'}</div>
+        </div>
+      </div>`;
+    });
+    body.innerHTML = html;
   }
   </script>
 </body>

@@ -12,6 +12,8 @@ function doGet(e) {
       result = confirmAsset(row);
     } else if (action === 'dashboard') {
       result = getDashboardData();
+    } else if (action === 'managerAssets') {
+      result = getManagerAssets(e.parameter.manager);
     }
     
     // Xử lý JSONP nếu có callback parameter (giải quyết CORS cho GitHub Pages)
@@ -202,5 +204,46 @@ function getDashboardData() {
 
   } catch (err) {
     return { error: err.message };
+  }
+}
+
+/**
+ * Trả về danh sách tài sản CHƯA KIỂM của một người quản lý cụ thể.
+ * @param {string} manager - Tên người quản lý (khớp với cột L)
+ */
+function getManagerAssets(manager) {
+  const spreadsheetId = '1iaLw6iQLnTMTtOTYJLanfoULWCrAOsTa33tubSpxRnQ';
+  const mainSheetName = 'Chinh cho 3 phong';
+  const startRow = 7;
+
+  if (!manager) return { success: false, error: 'Thiếu tên người quản lý' };
+
+  try {
+    const ss    = SpreadsheetApp.openById(spreadsheetId);
+    const sheet = ss.getSheetByName(mainSheetName);
+    if (!sheet) return { success: false, error: 'Không tìm thấy Sheet chính' };
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < startRow) return { success: true, manager: manager, assets: [] };
+
+    const data = sheet.getRange(startRow, 1, lastRow - startRow + 1, 22).getValues();
+    const assets = [];
+
+    data.forEach(function(row, i) {
+      const barcode   = String(row[4]).trim();   // cột E
+      const assetName = String(row[5]).trim();   // cột F
+      const mgr       = String(row[11]).trim();  // cột L
+      const status    = String(row[21]).trim();  // cột V
+
+      if (!barcode) return;
+      if (mgr !== String(manager).trim()) return;
+      if (status === 'Đã kiểm') return;
+
+      assets.push({ barcode: barcode, assetName: assetName, row: startRow + i });
+    });
+
+    return { success: true, manager: manager, assets: assets };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 }
