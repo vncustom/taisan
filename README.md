@@ -53,5 +53,4 @@ Mặc dù Google Apps Script (GAS) có thể render HTML trực tiếp, nhưng v
     *   Mở file `index.html`, tìm biến `GAS_URL` và dán URL Web App của bạn vào.
     *   Push mã nguồn lên GitHub và bật tính năng GitHub Pages trong phần Settings.
 
-## 📄 Ghi chú lịch sử
-Tài liệu hướng dẫn về phiên bản cũ (AppSheet) đã được chuyển sang file [appsheetreadme.md](file:///c:/Users/lyhan/Documents/GitHub/taisan/appsheetreadme.md).
+
