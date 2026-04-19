@@ -4,8 +4,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Asset Scanner Pro | Live</title>
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <title>Asset Scanner Pro</title>
+  <meta name="description" content="Hệ thống kiểm kê tài sản cơ quan với quét mã vạch tốc độ cao">
+  <!-- ZXing fallback cho iOS/Safari (chỉ tải nếu BarcodeDetector không có) -->
+  <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -13,7 +15,7 @@
       --primary-dark: #4f46e5;
       --secondary: #ec4899;
       --bg-dark: #0f172a;
-      --card-bg: rgba(30, 41, 59, 0.7);
+      --card-bg: rgba(30, 41, 59, 0.8);
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
       --success: #10b981;
@@ -21,334 +23,303 @@
       --glass-border: rgba(255, 255, 255, 0.1);
     }
 
-    * {
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
     body {
       font-family: 'Outfit', sans-serif;
       background-color: var(--bg-dark);
       background-image:
-        radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
-        radial-gradient(circle at 90% 80%, rgba(236, 72, 153, 0.1) 0%, transparent 40%);
+        radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.2) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(236, 72, 153, 0.12) 0%, transparent 40%);
       color: var(--text-main);
-      margin: 0;
-      padding: 0;
+      margin: 0; padding: 0;
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
+      display: flex; flex-direction: column;
       overflow-x: hidden;
     }
 
+    /* ── Header ── */
     header {
-      padding: 1.5rem;
+      padding: 1.2rem 1.5rem;
       text-align: center;
-      background: rgba(15, 23, 42, 0.8);
-      backdrop-filter: blur(10px);
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--glass-border);
-      position: sticky;
-      top: 0;
-      z-index: 100;
+      position: sticky; top: 0; z-index: 100;
     }
-
     header h1 {
-      margin: 0;
-      font-size: 1.5rem;
-      font-weight: 700;
+      margin: 0; font-size: 1.4rem; font-weight: 700;
       background: linear-gradient(to right, #818cf8, #f472b6);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      letter-spacing: -0.02em;
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
-
-    header p {
-      margin: 0.2rem 0 0;
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      font-weight: 300;
-    }
+    header p { margin: 0.15rem 0 0; font-size: 0.78rem; color: var(--text-muted); font-weight: 300; }
 
     main {
-      flex: 1;
-      padding: 1.5rem;
-      max-width: 600px;
-      margin: 0 auto;
-      width: 100%;
+      flex: 1; padding: 1.2rem;
+      max-width: 600px; margin: 0 auto; width: 100%;
     }
 
-    .scanner-card {
-      background: var(--card-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 24px;
-      overflow: hidden;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
-      margin-bottom: 1.5rem;
-      backdrop-filter: blur(20px);
-    }
-
-    #reader {
+    /* ── Camera Viewport ── */
+    .scanner-wrap {
+      position: relative;
       width: 100%;
-      border: none !important;
+      aspect-ratio: 4/3;
       background: #000;
+      border-radius: 20px;
+      overflow: hidden;
+      margin-bottom: 1rem;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+      border: 1px solid var(--glass-border);
     }
 
-    #reader video {
-      object-fit: cover !important;
+    #videoEl {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
     }
 
-    #reader__dashboard {
-      padding: 1.5rem !important;
-      background: transparent !important;
+    /* Scan overlay – animated laser line */
+    .scan-overlay {
+      position: absolute; inset: 0;
+      pointer-events: none;
+    }
+    .scan-frame {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 70%; max-width: 260px;
+      height: 120px;
+      border: 2px solid rgba(99,102,241,0.8);
+      border-radius: 8px;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,0.42);
+    }
+    /* Corner accents */
+    .scan-frame::before, .scan-frame::after {
+      content: '';
+      position: absolute;
+      width: 20px; height: 20px;
+      border-color: #818cf8; border-style: solid;
+    }
+    .scan-frame::before { top: -2px; left: -2px; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
+    .scan-frame::after  { bottom: -2px; right: -2px; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
+
+    /* Laser sweep animation */
+    .laser {
+      position: absolute;
+      left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(to right, transparent, #f472b6, #818cf8, transparent);
+      box-shadow: 0 0 8px #818cf8, 0 0 12px #f472b6;
+      top: 50%;
+      transform: translateY(-50%);
+      animation: sweep 2s ease-in-out infinite;
+    }
+    @keyframes sweep {
+      0%   { top: 5%;  opacity: 0.3; }
+      15%  { opacity: 1; }
+      85%  { opacity: 1; }
+      100% { top: 95%; opacity: 0.3; }
     }
 
-    #reader__dashboard_section_csr button {
-      background: var(--primary) !important;
-      color: white !important;
-      border: none !important;
-      padding: 0.8rem 1.5rem !important;
-      border-radius: 12px !important;
-      font-family: 'Outfit', sans-serif !important;
-      font-weight: 600 !important;
-      cursor: pointer !important;
-      text-transform: uppercase !important;
-      letter-spacing: 0.05em !important;
-      font-size: 0.85rem !important;
-      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4) !important;
+    /* Camera controls bar */
+    .cam-controls {
+      position: absolute; bottom: 10px; left: 0; right: 0;
+      display: flex; justify-content: center; gap: 12px;
+    }
+    .cam-btn {
+      background: rgba(15,23,42,0.7);
+      border: 1px solid var(--glass-border);
+      border-radius: 50%;
+      width: 40px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: white;
+      backdrop-filter: blur(6px);
+      transition: background 0.2s;
+    }
+    .cam-btn:active { background: rgba(99,102,241,0.5); }
+    .cam-btn.on { background: rgba(99,102,241,0.8); }
+
+    /* Engine badge */
+    #engineBadge {
+      position: absolute; top: 8px; right: 8px;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(4px);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 2px 8px;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
     }
 
+    /* Start camera prompt */
+    #startPrompt {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 0.8rem;
+      background: rgba(15,23,42,0.92);
+    }
+    #startPrompt .icon { font-size: 2.5rem; }
+    #startPrompt p { margin: 0; color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 0 1rem; }
+    #btnStartCamera {
+      background: linear-gradient(to right, var(--primary), var(--secondary));
+      color: white; border: none;
+      border-radius: 14px; padding: 0.75rem 1.8rem;
+      font-family: inherit; font-size: 0.95rem; font-weight: 600;
+      cursor: pointer; box-shadow: 0 8px 20px rgba(99,102,241,0.4);
+    }
+
+    /* ── Manual input ── */
     .input-group {
-      margin-bottom: 1.5rem;
-      display: flex;
-      gap: 0.5rem;
+      margin-bottom: 1.2rem; display: flex; gap: 0.5rem;
     }
-
     input[type="text"] {
       flex: 1;
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(255,255,255,0.05);
       border: 1px solid var(--glass-border);
-      border-radius: 12px;
-      padding: 0.8rem 1rem;
-      color: white;
-      font-family: inherit;
-      font-size: 1rem;
-      outline: none;
-      transition: all 0.2s;
+      border-radius: 12px; padding: 0.8rem 1rem;
+      color: white; font-family: inherit; font-size: 1rem;
+      outline: none; transition: all 0.2s;
     }
-
     input[type="text"]:focus {
       border-color: var(--primary);
-      background: rgba(255, 255, 255, 0.1);
-      box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+      background: rgba(255,255,255,0.09);
+      box-shadow: 0 0 0 4px rgba(99,102,241,0.12);
     }
-
     .btn-search {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255,255,255,0.08);
       border: 1px solid var(--glass-border);
-      border-radius: 12px;
-      width: 50px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: all 0.2s;
-      color: white;
+      border-radius: 12px; width: 50px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.2s; color: white;
     }
+    .btn-search:active { transform: scale(0.9); }
 
-    .btn-search:active {
-      transform: scale(0.9);
-    }
-
+    /* ── Result card ── */
     #result {
       display: none;
-      animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      animation: slideUp 0.4s cubic-bezier(0.16,1,0.3,1);
     }
-
     @keyframes slideUp {
-      from {
-        transform: translateY(20px);
-        opacity: 0;
-      }
-
-      to {
-        transform: translateY(0);
-        opacity: 1;
-      }
+      from { transform: translateY(20px); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
     }
-
     .result-card {
-      background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(236, 72, 153, 0.05));
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 24px;
-      padding: 1.5rem;
+      background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(236,72,153,0.06));
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 24px; padding: 1.5rem;
       backdrop-filter: blur(20px);
     }
-
-    .asset-title {
-      font-size: 1.25rem;
-      font-weight: 700;
-      margin-bottom: 0.5rem;
-      line-height: 1.4;
-    }
-
+    .asset-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 0.4rem; line-height: 1.4; }
     .asset-code {
       font-family: monospace;
-      background: rgba(0, 0, 0, 0.2);
-      padding: 0.2rem 0.6rem;
-      border-radius: 6px;
-      font-size: 0.9rem;
-      color: var(--primary);
+      background: rgba(0,0,0,0.25); padding: 0.2rem 0.6rem;
+      border-radius: 6px; font-size: 0.88rem; color: var(--primary);
     }
-
-    .info-grid {
-      margin-top: 1.5rem;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem;
-    }
-
-    .info-item {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .info-label {
-      font-size: 0.7rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 0.2rem;
-    }
-
-    .info-value {
-      font-weight: 600;
-      font-size: 0.95rem;
-    }
-
-    .status-badge {
-      display: inline-block;
-      padding: 0.2rem 0.6rem;
-      border-radius: 20px;
-      font-size: 0.75rem;
-      font-weight: 600;
-    }
-
-    .status-checked {
-      background: rgba(16, 185, 129, 0.2);
-      color: #34d399;
-    }
-
-    .status-pending {
-      background: rgba(239, 68, 68, 0.2);
-      color: #f87171;
-    }
+    .info-grid { margin-top: 1.2rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .info-item { display: flex; flex-direction: column; }
+    .info-label { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.15rem; }
+    .info-value { font-weight: 600; font-size: 0.92rem; }
+    .status-badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.73rem; font-weight: 600; }
+    .status-checked { background: rgba(16,185,129,0.2); color: #34d399; }
+    .status-pending { background: rgba(239,68,68,0.2);    color: #f87171; }
 
     .btn-confirm {
-      margin-top: 1.5rem;
-      width: 100%;
+      margin-top: 1.4rem; width: 100%;
       background: linear-gradient(to right, var(--primary), var(--secondary));
-      color: white;
-      border: none;
-      border-radius: 16px;
-      padding: 1.2rem;
-      font-size: 1rem;
-      font-weight: 700;
-      cursor: pointer;
-      box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
+      color: white; border: none; border-radius: 16px;
+      padding: 1.1rem; font-size: 1rem; font-weight: 700; cursor: pointer;
+      box-shadow: 0 10px 20px rgba(99,102,241,0.3);
       transition: all 0.3s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
     }
+    .btn-confirm:active  { transform: scale(0.98); }
+    .btn-confirm:disabled { opacity: 0.5; cursor: not-allowed; background: #475569; }
 
-    .btn-confirm:active {
-      transform: scale(0.98);
-    }
-
-    .btn-confirm:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      background: #475569;
-    }
-
+    /* ── Loading overlay ── */
     #loadingOverlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(5px);
+      display: none; position: fixed; inset: 0;
+      background: rgba(15,23,42,0.85); backdrop-filter: blur(5px);
       z-index: 1000;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
+      align-items: center; justify-content: center; flex-direction: column;
     }
-
     .spinner {
-      width: 40px;
-      height: 40px;
-      border: 4px solid rgba(255, 255, 255, 0.1);
-      border-left-color: var(--primary);
-      border-radius: 50%;
+      width: 40px; height: 40px;
+      border: 4px solid rgba(255,255,255,0.1);
+      border-left-color: var(--primary); border-radius: 50%;
       animation: spin 1s linear infinite;
     }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
+    /* ── Toast ── */
     #toast {
-      position: fixed;
-      bottom: 2rem;
-      left: 50%;
+      position: fixed; bottom: 2rem; left: 50%;
       transform: translateX(-50%) translateY(120px);
-      background: #1e293b;
-      color: white;
-      padding: 1rem 1.5rem;
-      border-radius: 16px;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      background: #1e293b; color: white;
+      padding: 0.9rem 1.4rem; border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
       border: 1px solid var(--glass-border);
-      z-index: 2000;
-      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      font-weight: 500;
-      min-width: 280px;
-      text-align: center;
+      z-index: 2000; transition: all 0.4s cubic-bezier(0.175,0.885,0.32,1.275);
+      font-weight: 500; min-width: 260px; text-align: center; font-size: 0.9rem;
     }
-
-    #toast.show {
-      transform: translateX(-50%) translateY(0);
-    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
   </style>
 </head>
 
 <body>
-
   <header>
     <h1>Asset Scanner Pro</h1>
     <p>Hệ thống Kiểm kê Tài sản Cơ quan</p>
   </header>
 
   <main>
-    <div class="scanner-card">
-      <div id="reader"></div>
+    <!-- Camera Viewport -->
+    <div class="scanner-wrap">
+      <video id="videoEl" autoplay playsinline muted></video>
+
+      <!-- Scan overlay (hidden until camera starts) -->
+      <div class="scan-overlay" id="scanOverlay" style="display:none;">
+        <div class="scan-frame">
+          <div class="laser"></div>
+        </div>
+        <div class="cam-controls">
+          <button class="cam-btn" id="btnFlash" title="Đèn flash" onclick="toggleFlash()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </button>
+          <button class="cam-btn" id="btnZoom" title="Phóng to ×2" onclick="toggleZoom()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+          </button>
+          <button class="cam-btn" id="btnStop" title="Dừng camera" onclick="stopCamera()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Engine badge -->
+      <div id="engineBadge">Chờ camera…</div>
+
+      <!-- Start prompt -->
+      <div id="startPrompt">
+        <div class="icon">📷</div>
+        <p>Nhấn để mở camera và bắt đầu quét mã vạch tài sản</p>
+        <button id="btnStartCamera" onclick="startCamera()">Mở Camera</button>
+      </div>
     </div>
 
+    <!-- Manual Input -->
     <div class="input-group">
-      <input type="text" id="manualBarcode" placeholder="Nhập mã tài sản bằng tay...">
+      <input type="text" id="manualBarcode" placeholder="Hoặc nhập mã tài sản bằng tay…"
+        onkeydown="if(event.key==='Enter') searchManual()">
       <button class="btn-search" onclick="searchManual()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
           stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
       </button>
     </div>
 
+    <!-- Result Section -->
     <div id="result">
       <div class="result-card">
         <div id="assetName" class="asset-title"></div>
@@ -360,9 +331,9 @@
           </div>
         </div>
         <button id="btnConfirm" class="btn-confirm" onclick="confirmScan()">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-            stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="20 6 9 17 4 12"></polyline>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
           </svg>
           Xác nhận Đã kiểm
         </button>
@@ -372,193 +343,313 @@
 
   <div id="loadingOverlay">
     <div class="spinner"></div>
-    <p style="margin-top: 1rem; color: var(--text-muted);">Đang xử lý...</p>
+    <p style="margin-top:1rem;color:var(--text-muted)">Đang xử lý…</p>
   </div>
   <div id="toast"></div>
 
   <script>
-    // ================================================================
-    // *** QUAN TRỌNG: DÁN URL GOOGLE APPS SCRIPT CỦA BẠN VÀO ĐÂY ***
-    // Lấy ở: Apps Script > Triển khai > Quản lý bản triển khai > URL
-    // ================================================================
-    const GAS_URL = "https://script.google.com/macros/s/AKfycby835mW427pfBtqd9R_o2zDnNnIbWBHjQw-NpbHAEIY2vPP0yvezE2fFmA8O6znB4MFVQ/exec";
+  // ================================================================
+  // *** PASTE YOUR GOOGLE APPS SCRIPT URL HERE ***
+  // ================================================================
+  const GAS_URL = "https://script.google.com/macros/s/AKfycby835mW427pfBtqd9R_o2zDnNnIbWBHjQw-NpbHAEIY2vPP0yvezE2fFmA8O6znB4MFVQ/exec";
+  // ================================================================
 
-    // ----------------------------------------------------------------
-    let html5QrcodeScanner = null;
-    let currentAssetRow = null;
-    let lastScannedCode = null;
+  // ---------- State ----------
+  let currentAssetRow = null;
+  let lastScannedCode = null;
+  let mediaStream      = null;
+  let animFrameId      = null;
+  let barcodeDetector  = null;   // Native API instance
+  let zxingReader      = null;   // ZXing fallback instance
+  let isZoomed         = false;
+  let flashOn          = false;
+  let scanPaused       = false;  // pause while lookup is running
 
-    document.addEventListener('DOMContentLoaded', () => {
-      if (!GAS_URL || GAS_URL === "PASTE_YOUR_GAS_URL_HERE" || !GAS_URL.includes("script.google.com")) {
-        showToast("⚠️ Chưa cấu hình GAS URL. Liên hệ quản trị viên.", "error");
+  const video    = document.getElementById('videoEl');
+  const overlay  = document.getElementById('scanOverlay');
+  const prompt   = document.getElementById('startPrompt');
+  const badge    = document.getElementById('engineBadge');
+
+  // ---------- Camera Start ----------
+  async function startCamera() {
+    try {
+      // Request highest-res rear camera with continuous autofocus
+      const constraints = {
+        video: {
+          facingMode: { ideal: 'environment' },
+          width:  { ideal: 1920 },
+          height: { ideal: 1080 },
+          focusMode: 'continuous',          // best-effort
+          advanced: [{ focusMode: 'continuous' }]
+        }
+      };
+      mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      video.srcObject = mediaStream;
+      await video.play();
+
+      // Try to enable continuous autofocus via track capabilities
+      applyAdvancedCameraSettings();
+
+      // Show overlay, hide prompt
+      overlay.style.display = 'block';
+      prompt.style.display  = 'none';
+
+      // Choose scan engine
+      if ('BarcodeDetector' in window) {
+        await startNativeDetector();
+      } else {
+        await startZxingFallback();
       }
-      initScanner();
+    } catch (err) {
+      showToast('❌ Không thể mở camera: ' + err.message, 'error');
+    }
+  }
+
+  function applyAdvancedCameraSettings() {
+    if (!mediaStream) return;
+    const track = mediaStream.getVideoTracks()[0];
+    if (!track) return;
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+
+    const constraints = {};
+    // Continuous autofocus
+    if (caps.focusMode && caps.focusMode.includes('continuous')) {
+      constraints.focusMode = 'continuous';
+    }
+    if (Object.keys(constraints).length) {
+      track.applyConstraints({ advanced: [constraints] }).catch(() => {});
+    }
+  }
+
+  // ---------- Engine 1: Native BarcodeDetector API ----------
+  async function startNativeDetector() {
+    badge.textContent = '⚡ Native API';
+    badge.style.color = '#34d399';
+
+    const supported = await BarcodeDetector.getSupportedFormats().catch(() => []);
+    const formats = supported.includes('code_128')
+      ? ['code_128','ean_13','ean_8','code_39','qr_code','data_matrix','itf','codabar']
+      : undefined;  // undefined = let browser pick all
+
+    barcodeDetector = new BarcodeDetector({ formats });
+
+    async function tick() {
+      if (video.readyState === video.HAVE_ENOUGH_DATA && !scanPaused) {
+        try {
+          const codes = await barcodeDetector.detect(video);
+          if (codes.length > 0) {
+            handleDetected(codes[0].rawValue);
+          }
+        } catch (_) {}
+      }
+      animFrameId = requestAnimationFrame(tick);
+    }
+    animFrameId = requestAnimationFrame(tick);
+  }
+
+  // ---------- Engine 2: ZXing fallback (iOS / non-Chrome) ----------
+  async function startZxingFallback() {
+    badge.textContent = '🔄 ZXing Engine';
+    badge.style.color = '#facc15';
+
+    try {
+      const hints = new Map();
+      // Prioritize linear barcode formats
+      const ZXing = window['ZXing'];
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+        ZXing.BarcodeFormat.CODE_128,
+        ZXing.BarcodeFormat.EAN_13,
+        ZXing.BarcodeFormat.EAN_8,
+        ZXing.BarcodeFormat.CODE_39,
+        ZXing.BarcodeFormat.QR_CODE,
+        ZXing.BarcodeFormat.DATA_MATRIX,
+        ZXing.BarcodeFormat.ITF,
+      ]);
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+
+      zxingReader = new ZXing.BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 80 });
+
+      // Use the existing video stream directly
+      zxingReader.decodeFromStream(mediaStream, video, (result, err) => {
+        if (result && !scanPaused) {
+          handleDetected(result.getText());
+        }
+      });
+    } catch (e) {
+      badge.textContent = '⚠️ Lỗi engine';
+      showToast('Engine quét lỗi: ' + e.message, 'error');
+    }
+  }
+
+  // ---------- Detected ----------
+  function handleDetected(code) {
+    if (!code || code === lastScannedCode) return;
+    lastScannedCode = code;
+    vibrate();
+    lookupAsset(code);
+  }
+
+  // ---------- Stop Camera ----------
+  function stopCamera() {
+    if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+    if (zxingReader)  { zxingReader.reset(); zxingReader = null; }
+    if (mediaStream)  { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+    video.srcObject = null;
+    overlay.style.display = 'none';
+    prompt.style.display  = 'flex';
+    badge.textContent = 'Chờ camera…';
+    badge.style.color = '';
+    isZoomed = false; flashOn = false;
+    document.getElementById('btnZoom').classList.remove('on');
+    document.getElementById('btnFlash').classList.remove('on');
+  }
+
+  // ---------- Flash ----------
+  function toggleFlash() {
+    const track = mediaStream && mediaStream.getVideoTracks()[0];
+    if (!track) return;
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (!caps.torch) { showToast('Thiết bị không hỗ trợ đèn flash', 'error'); return; }
+    flashOn = !flashOn;
+    track.applyConstraints({ advanced: [{ torch: flashOn }] });
+    document.getElementById('btnFlash').classList.toggle('on', flashOn);
+  }
+
+  // ---------- Zoom ×2 ----------
+  function toggleZoom() {
+    const track = mediaStream && mediaStream.getVideoTracks()[0];
+    if (!track) return;
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (!caps.zoom) { showToast('Thiết bị không hỗ trợ zoom phần cứng', 'error'); return; }
+    isZoomed = !isZoomed;
+    const zoomVal = isZoomed
+      ? Math.min(caps.zoom.max, caps.zoom.min + (caps.zoom.max - caps.zoom.min) * 0.5)
+      : caps.zoom.min;
+    track.applyConstraints({ advanced: [{ zoom: zoomVal }] });
+    document.getElementById('btnZoom').classList.toggle('on', isZoomed);
+  }
+
+  // ---------- Manual input ----------
+  function searchManual() {
+    const code = document.getElementById('manualBarcode').value.trim();
+    if (code) { lastScannedCode = null; lookupAsset(code); }
+  }
+
+  // ---------- Lookup ----------
+  function lookupAsset(barcode) {
+    scanPaused = true;
+    showLoading(true);
+    document.getElementById('result').style.display = 'none';
+
+    callGAS({ action: 'lookup', barcode: barcode }, (res) => {
+      showLoading(false);
+      if (!res) { scanPaused = false; return; }
+
+      if (res.found) {
+        displayResult(res);
+        showToast('✓ Tìm thấy tài sản', 'success');
+      } else if (res.error) {
+        showToast('Lỗi: ' + res.error, 'error');
+        lastScannedCode = null; scanPaused = false;
+      } else {
+        showToast('Không tìm thấy mã: ' + barcode, 'error');
+        lastScannedCode = null; scanPaused = false;
+      }
     });
+  }
 
-    function initScanner() {
-      html5QrcodeScanner = new Html5QrcodeScanner(
-        "reader",
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 150 },
-          aspectRatio: 1.0,
-          formatsToSupport: [
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.CODE_39
-          ],
-          rememberLastUsedCamera: true,
-          showTorchButtonIfSupported: true
-        }
-      );
-      html5QrcodeScanner.render(onScanSuccess, onScanError);
-    }
+  // ---------- Confirm ----------
+  function confirmScan() {
+    if (!currentAssetRow) return;
+    showLoading(true);
+    const btn = document.getElementById('btnConfirm');
+    btn.disabled = true;
 
-    function onScanSuccess(decodedText) {
-      if (decodedText !== lastScannedCode) {
-        lastScannedCode = decodedText;
-        vibrate();
-        lookupAsset(decodedText);
+    callGAS({ action: 'confirm', row: currentAssetRow }, (res) => {
+      showLoading(false);
+      if (!res) { btn.disabled = false; return; }
+      if (res.success) {
+        showToast('✅ Cập nhật thành công!', 'success');
+        document.getElementById('assetStatus').innerHTML =
+          '<span class="status-badge status-checked">Đã kiểm</span>';
+        setTimeout(() => {
+          document.getElementById('result').style.display = 'none';
+          document.getElementById('manualBarcode').value = '';
+          lastScannedCode = null;
+          scanPaused = false;
+        }, 2000);
+      } else {
+        showToast(res.error || 'Gặp lỗi khi lưu.', 'error');
+        btn.disabled = false;
       }
+    });
+  }
+
+  // ---------- JSONP (bypass CORS) ----------
+  function callGAS(params, callback) {
+    const cbName = 'gas_cb_' + Date.now() + '_' + Math.floor(Math.random() * 99999);
+    let settled = false;
+    let scriptEl = null;
+
+    function cleanup() {
+      delete window[cbName];
+      if (scriptEl && scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
     }
 
-    function onScanError() { /* bình thường, bỏ qua */ }
-
-    function searchManual() {
-      const code = document.getElementById('manualBarcode').value.trim();
-      if (code) {
-        lastScannedCode = null; // cho phép tra lại cùng mã khi nhập tay
-        lookupAsset(code);
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true; cleanup(); showLoading(false);
+        showToast('⏱️ Hết thời gian chờ. Kiểm tra kết nối & GAS URL.', 'error');
+        lastScannedCode = null; scanPaused = false; callback(null);
       }
-    }
+    }, 15000);
 
-    // --- Tra cứu tài sản ---
-    function lookupAsset(barcode) {
-      showLoading(true);
-      document.getElementById('result').style.display = 'none';
+    window[cbName] = (data) => {
+      if (!settled) { settled = true; clearTimeout(timer); cleanup(); callback(data); }
+    };
 
-      callGAS({ action: 'lookup', barcode: barcode }, (res) => {
-        showLoading(false);
-        if (!res) return; // timeout đã xử lý
-        if (res.found) {
-          displayResult(res);
-          showToast("✓ Tìm thấy tài sản", "success");
-        } else if (res.error) {
-          showToast("Lỗi: " + res.error, "error");
-          lastScannedCode = null;
-        } else {
-          showToast("Không tìm thấy mã: " + barcode, "error");
-          lastScannedCode = null;
-        }
-      });
-    }
+    const qs = Object.keys(params)
+      .map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k])).join('&');
 
-    // --- Xác nhận đã kiểm ---
-    function confirmScan() {
-      if (!currentAssetRow) return;
-      showLoading(true);
-      const btn = document.getElementById('btnConfirm');
-      btn.disabled = true;
-
-      callGAS({ action: 'confirm', row: currentAssetRow }, (res) => {
-        showLoading(false);
-        if (!res) { btn.disabled = false; return; }
-        if (res.success) {
-          showToast("✅ Cập nhật thành công!", "success");
-          document.getElementById('assetStatus').innerHTML = '<span class="status-badge status-checked">Đã kiểm</span>';
-          setTimeout(() => {
-            lastScannedCode = null;
-            document.getElementById('result').style.display = 'none';
-            document.getElementById('manualBarcode').value = '';
-          }, 2000);
-        } else {
-          showToast((res.error) || "Gặp lỗi khi lưu.", "error");
-          btn.disabled = false;
-        }
-      });
-    }
-
-    // --- JSONP wrapper (bypass CORS) với timeout 15 giây ---
-    function callGAS(params, callback) {
-      const cbName = 'gas_cb_' + Date.now() + '_' + Math.floor(Math.random() * 9999);
-      let settled = false;
-      let scriptEl = null;
-
-      function cleanup() {
-        delete window[cbName];
-        if (scriptEl && scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
+    scriptEl = document.createElement('script');
+    scriptEl.onerror = () => {
+      if (!settled) {
+        settled = true; clearTimeout(timer); cleanup(); showLoading(false);
+        showToast('❌ Không kết nối được GAS. Kiểm tra URL & quyền truy cập.', 'error');
+        lastScannedCode = null; scanPaused = false; callback(null);
       }
+    };
+    scriptEl.src = GAS_URL + '?' + qs + '&callback=' + cbName;
+    document.body.appendChild(scriptEl);
+  }
 
-      // Timeout: nếu sau 15 giây không có phản hồi → báo lỗi
-      const timer = setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          cleanup();
-          showLoading(false);
-          showToast("⏱️ Hết thời gian chờ. Kiểm tra kết nối & GAS URL.", "error");
-          lastScannedCode = null;
-          callback(null);
-        }
-      }, 15000);
+  // ---------- UI helpers ----------
+  function displayResult(asset) {
+    currentAssetRow = asset.row;
+    document.getElementById('assetName').innerText = asset.assetName;
+    document.getElementById('barcodeValue').innerText = asset.barcode;
+    const isChecked = String(asset.status).trim() === 'Đã kiểm';
+    document.getElementById('assetStatus').innerHTML = isChecked
+      ? '<span class="status-badge status-checked">Đã kiểm</span>'
+      : '<span class="status-badge status-pending">Chưa kiểm</span>';
+    document.getElementById('btnConfirm').disabled = isChecked;
+    document.getElementById('result').style.display = 'block';
+    if (isChecked) scanPaused = false; // already done, let camera scan next item
+  }
 
-      window[cbName] = function (data) {
-        if (!settled) {
-          settled = true;
-          clearTimeout(timer);
-          cleanup();
-          callback(data);
-        }
-      };
+  function showLoading(show) {
+    document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+  }
 
-      const qs = Object.keys(params)
-        .map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k]))
-        .join('&');
+  function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.innerText = msg;
+    t.style.borderColor = type === 'success' ? 'var(--success)' : 'var(--error)';
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3500);
+  }
 
-      scriptEl = document.createElement('script');
-      scriptEl.onerror = function () {
-        if (!settled) {
-          settled = true;
-          clearTimeout(timer);
-          cleanup();
-          showLoading(false);
-          showToast("❌ Không kết nối được GAS. Kiểm tra URL & quyền truy cập.", "error");
-          lastScannedCode = null;
-          callback(null);
-        }
-      };
-      scriptEl.src = GAS_URL + '?' + qs + '&callback=' + cbName;
-      document.body.appendChild(scriptEl);
-    }
-
-    // --- UI helpers ---
-    function displayResult(asset) {
-      currentAssetRow = asset.row;
-      document.getElementById('assetName').innerText = asset.assetName;
-      document.getElementById('barcodeValue').innerText = asset.barcode;
-      const isChecked = String(asset.status).trim() === 'Đã kiểm';
-      document.getElementById('assetStatus').innerHTML = isChecked
-        ? '<span class="status-badge status-checked">Đã kiểm</span>'
-        : '<span class="status-badge status-pending">Chưa kiểm</span>';
-      document.getElementById('btnConfirm').disabled = isChecked;
-      document.getElementById('result').style.display = 'block';
-    }
-
-    function showLoading(show) {
-      document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
-    }
-
-    function showToast(msg, type) {
-      const toast = document.getElementById('toast');
-      toast.innerText = msg;
-      toast.style.borderColor = type === 'success' ? 'var(--success)' : 'var(--error)';
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 3500);
-    }
-
-    function vibrate() {
-      if (navigator.vibrate) navigator.vibrate(100);
-    }
+  function vibrate() { if (navigator.vibrate) navigator.vibrate([60, 30, 60]); }
   </script>
 </body>
-
 </html>
