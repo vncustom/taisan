@@ -103,7 +103,9 @@ function confirmAsset(row) {
 /**
  * Lấy dữ liệu tổng hợp để hiển thị Dashboard kiểm kê tài sản.
  * - Đọc cột E (barcode), L (người quản lý), V (trạng thái) từ Sheet chính.
- * - Join với Sheet "Phong" (cột A: tên người, cột B: tên phòng).
+ * - Join với Sheet "Phong":
+ *     Hàng 1 = tên phòng (header) ở các cột A, B, C, D...
+ *     Hàng 2 trở đi = tên nhân viên liệt kê dọc theo từng cột phòng.
  * - Trả về: tổng asset, tổng đã kiểm, danh sách phòng + người kèm số liệu.
  */
 function getDashboardData() {
@@ -115,18 +117,29 @@ function getDashboardData() {
   try {
     const ss = SpreadsheetApp.openById(spreadsheetId);
 
-    // ── 1. Đọc Sheet "Phong": cột A = tên người quản lý, cột B = tên phòng ──
+    // ── 1. Đọc Sheet "Phong" ──
+    // Cấu trúc thực tế:
+    //   Hàng 1  → tên phòng (A1=Phòng Kỹ thuật, B1=Phòng MCR, C1=Phòng Phát hình, D1=Khác…)
+    //   Hàng 2+ → tên nhân viên liệt kê dọc dưới mỗi cột phòng
     const roomSheet = ss.getSheetByName(roomSheetName);
     const managerToRoom = {};
     if (roomSheet) {
-      const roomLastRow = roomSheet.getLastRow();
-      if (roomLastRow >= 1) {
-        const roomData = roomSheet.getRange(1, 1, roomLastRow, 2).getValues();
-        roomData.forEach(function(row) {
-          const name = String(row[0]).trim();
-          const room = String(row[1]).trim();
-          if (name && room) managerToRoom[name] = room;
-        });
+      const roomLastRow  = roomSheet.getLastRow();
+      const roomLastCol  = roomSheet.getLastColumn();
+      if (roomLastRow >= 2 && roomLastCol >= 1) {
+        const roomData = roomSheet.getRange(1, 1, roomLastRow, roomLastCol).getValues();
+        // Hàng đầu (index 0) = tên phòng
+        const deptNames = roomData[0].map(function(h) { return String(h).trim(); });
+        // Từ hàng thứ 2 (index 1) trở đi = tên nhân viên
+        for (var r = 1; r < roomData.length; r++) {
+          for (var c = 0; c < roomLastCol; c++) {
+            var empName = String(roomData[r][c]).trim();
+            var deptName = deptNames[c] || ('Phòng ' + (c + 1));
+            if (empName) {
+              managerToRoom[empName] = deptName;
+            }
+          }
+        }
       }
     }
 
