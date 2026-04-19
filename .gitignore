@@ -1,0 +1,13 @@
+# Internal Agent files
+.agent/
+artifacts/
+.gemini/
+
+# System files
+Thumb.db
+.DS_Store
+
+# Virtual Environments
+venv/
+.venv/
+__pycache__/
