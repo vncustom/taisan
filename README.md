@@ -1,52 +1,48 @@
-# 🚀 Asset Scanner Pro (Phiên bản Live Camera)
+# Asset Inventory Scanner Pro 🚀
 
-Giải pháp kiểm kê tài sản cơ quan dùng Google Apps Script làm Backend và GitHub Pages làm Frontend để vượt rào giới hạn camera trên Apps Script Iframe.
+Hệ thống quản lý và kiểm kê tài sản tốc độ cao, kết hợp sức mạnh của **Google Apps Script (GAS)** và **GitHub Pages**.
 
-## 🌟 Tính năng
-- **Quét trực tiếp (Live Streaming):** Camera quét liên tục như một ứng dụng native, không cần chụp ảnh.
-- **Tốc độ cao:** Nhận diện barcode (Code 128, EAN 13, Code 39) trong tích tắc.
-- **Không giới hạn:** Hỗ trợ số lượng người dùng đồng thời không giới hạn (vượt giới hạn 10 người của AppSheet).
-- **Thiết kế Premium:** Giao diện hiện đại, tối ưu cho di động với hiệu ứng Glassmorphism.
-- **Tự động hóa:** Tự động tra cứu thông tin và cập nhật trạng thái "Đã kiểm" vào Google Sheet.
+## 🏗️ Kiến trúc hệ thống
 
-## 🏗️ Kiến trúc Hệ thống
-1. **Frontend (GitHub Pages):** Host giao diện quét mã vạch và xử lý camera.
-2. **Backend (Google Apps Script):** API nhận yêu cầu từ Frontend, giao tiếp với Google Sheet.
-3. **Database (Google Sheet):** Lưu trữ dữ liệu tài sản.
+Dự án được xây dựng dựa trên mô hình Client-Server gọn nhẹ:
 
-## 🛠️ Hướng dẫn Cài đặt cho Admin
+1.  **GitHub Pages (Frontend - Giao diện người dùng):**
+    *   **Nhiệm vụ:** Cung cấp giao diện quét mã vạch, hiển thị thông tin tài sản và Dashboard báo cáo.
+    *   **Công nghệ:** HTML5, CSS3 (Glassmorphism), JavaScript (Vanilla).
+    *   **Quét mã vạch:** Sử dụng **Native BarcodeDetector API** (tăng tốc phần cứng) trên Chrome/Android cho tốc độ cực nhanh, và thư viện **ZXing** làm fallback trên iOS/Safari.
+    *   **Giao tiếp:** Sử dụng kỹ thuật **JSONP** để gọi API từ Google Apps Script mà không bị chặn bởi chính sách CORS.
 
-### Bước 1: Thiết lập Google Apps Script (Backend)
-1. Truy cập file Google Sheet của bạn.
-2. Vào **Tiện ích mở rộng** > **Apps Script**.
-3. Copy toàn bộ nội dung file `Code.gs` từ máy tính và dán vào.
-4. Bấm **Triển khai** > **Bản triển khai mới**.
-5. Cấu hình:
-   - Loại: **Ứng dụng web**.
-   - Thực thi với tư cách: **Tôi (Me)**.
-   - Ai có quyền truy cập: **Bất kỳ ai (Anyone)**. (Đây là điểm quan trọng để API nhận được request từ GitHub).
-6. Copy đường dẫn **URL ứng dụng web** (có dạng `.../exec`).
+2.  **Google Apps Script (Backend - Xử lý dữ liệu):**
+    *   **Nhiệm vụ:** Đóng vai trò là API trung gian, đọc/ghi dữ liệu trực tiếp vào Google Sheets.
+    *   **Tính năng:**
+        *   `lookupBarcode`: Tìm kiếm thông tin tài sản trong bảng tính.
+        *   `confirmAsset`: Cập nhật trạng thái "Đã kiểm" cho tài sản.
+        *   `getDashboardData`: Tổng hợp số liệu tiến độ theo Phòng và theo Người quản lý.
+        *   `getManagerAssets`: Lấy danh sách chi tiết các tài sản chưa kiểm của một người cụ thể.
 
-### Bước 2: Thiết lập GitHub Pages (Frontend)
-1. Mở file `index.html` trên máy tính.
-2. Tìm dòng `const GAS_URL = "..."` (khoảng dòng 276) và dán URL bạn vừa copy ở Bước 1 vào.
-3. Push toàn bộ code lên một repository GitHub mới:
-   ```bash
-   git add .
-   git commit -m "Cập nhật GAS URL"
-   git push origin main
-   ```
-4. Trên GitHub: Vào **Settings** > **Pages** > **Build and deployment**.
-5. Chọn Branch: `main`, Folder: `/ (root)`. Bấm **Save**.
-6. GitHub sẽ cung cấp cho bạn một link (Dạng `https://username.github.io/taisan/`). Đây là link để nhân viên sử dụng.
+3.  **Google Sheets (Database - Cơ sở dữ liệu):**
+    *   **Sheet "Chinh cho 3 phong":** Lưu trữ dữ liệu tài sản gốc (Barcode, Tên tài sản, Người quản lý, Trạng thái...).
+    *   **Sheet "Phong":** Lưu trữ danh mục nhân viên theo từng phòng để phục vụ báo cáo Dashboard.
 
-## 📱 Hướng dẫn dành cho Nhân viên
-1. Mở link GitHub Pages trên trình duyệt điện thoại.
-2. Cho phép truy cập Camera khi được hỏi.
-3. Đưa camera vào mã vạch trên tem tài sản.
-4. Sau khi hệ thống nhận mã và hiển thị tên tài sản, nhấn **Xác nhận Đã kiểm**.
-5. Hệ thống báo thành công là hoàn tất 1 tài sản. Quét tiếp tài sản khác sau 2 giây.
+## ✨ Tính năng nổi bật
 
-## ⚠️ Lưu ý kỹ thuật
-- **CORS:** Chúng tôi sử dụng kỹ thuật **JSONP** để giao tiếp giữa GitHub và Google Script, đảm bảo không bị chặn bởi chính sách bảo mật trình duyệt.
-- **Camera:** Nếu camera không hiện, hãy kiểm tra xem bạn đã mở link qua **HTTPS** chưa (GitHub Pages mặc định là HTTPS).
+*   **Siêu nhanh:** Nhận diện mã vạch gần như ngay lập tức nhờ Native API.
+*   **Tiện lợi:** Hỗ trợ bật đèn Flash, Zoom camera trực tiếp trên giao diện web.
+*   **Dashboard trực quan:** Biểu đồ vòng (Progress ring) và thanh tiến trình (Progress bar) cho từng phòng ban.
+*   **Theo dõi chi tiết:** Lọc theo người quản lý, xem danh sách chính xác các món đồ "Chưa kiểm" để đôn đốc.
+*   **Không cần cài đặt:** Chạy trực tiếp trên trình duyệt điện thoại (Safar, Chrome).
+
+## 🛠️ Hướng dẫn thiết lập
+
+1.  **Google Sheets:** Đảm bảo có 2 sheet tên là `Chinh cho 3 phong` và `Phong` với cấu trúc như đã thống nhất.
+2.  **Google Apps Script (Code.gs):**
+    *   Copy nội dung file `Code.gs` vào dự án GAS của bạn.
+    *   Thay đổi `spreadsheetId` trong code thành ID bảng tính của bạn.
+    *   **Deploy** dưới dạng "Web App", cấu hình quyền truy cập thành **"Anyone"**.
+    *   Copy URL của Web App sau khi deploy.
+3.  **GitHub Pages (index.html):**
+    *   Mở file `index.html`, tìm biến `GAS_URL` và dán URL Web App của bạn vào.
+    *   Push mã nguồn lên GitHub và bật tính năng GitHub Pages trong phần Settings.
+
+## 📄 Ghi chú lịch sử
+Tài liệu hướng dẫn về phiên bản cũ (AppSheet) đã được chuyển sang file [appsheetreadme.md](file:///c:/Users/lyhan/Documents/GitHub/taisan/appsheetreadme.md).
