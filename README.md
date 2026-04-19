@@ -32,6 +32,15 @@ Dự án được xây dựng dựa trên mô hình Client-Server gọn nhẹ:
 *   **Theo dõi chi tiết:** Lọc theo người quản lý, xem danh sách chính xác các món đồ "Chưa kiểm" để đôn đốc.
 *   **Không cần cài đặt:** Chạy trực tiếp trên trình duyệt điện thoại (Safar, Chrome).
 
+## ❓ Tại sao dùng GitHub Pages frontend thay vì GAS Web App URL?
+
+Mặc dù Google Apps Script (GAS) có thể render HTML trực tiếp, nhưng việc sử dụng GitHub Pages làm Frontend mang lại nhiều lợi thế kỹ thuật quan trọng:
+
+1.  **Vượt qua rào cản Iframe:** Các Web App chạy trực tiếp trên `script.google.com` bị bao bọc trong một `iframe` bảo mật (sandbox). Điều này thường gây ra lỗi khi yêu cầu quyền truy cập Camera hoặc sử dụng các API phần cứng nâng cao như **BarcodeDetector** trên nhiều dòng điện thoại. GitHub Pages chạy như một trang web độc lập, giúp việc xin quyền Camera ổn định hơn 100%.
+2.  **Tốc độ và Hiệu năng:** GitHub Pages phục vụ file tĩnh cực nhanh qua CDN toàn cầu, giảm độ trễ khi tải trang so với việc GAS phải render template phía server mỗi lần truy cập.
+3.  **Hỗ trợ Native Barcode API:** Một số trình duyệt di động hạn chế các API quét mã vạch tốc độ cao khi trang web nằm trong iframe của Google. Dùng GitHub Pages đảm bảo tính năng quét mã vạch hoạt động ở hiệu suất tối đa.
+4.  **Trải nghiệm người dùng (UX):** URL của GitHub Pages ngắn gọn, dễ nhớ và có thể cài đặt như một ứng dụng (PWA) dễ dàng hơn so với đường dẫn dài dằng dặc của Google Script.
+
 ## 🛠️ Hướng dẫn thiết lập
 
 1.  **Google Sheets:** Đảm bảo có 2 sheet tên là `Chinh cho 3 phong` và `Phong` với cấu trúc như đã thống nhất.
