@@ -1,516 +1,564 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Asset Scanner Pro | Live</title>
-    <!-- Thư viện giải mã barcode -->
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --primary: #6366f1;
-            --primary-dark: #4f46e5;
-            --secondary: #ec4899;
-            --bg-dark: #0f172a;
-            --card-bg: rgba(30, 41, 59, 0.7);
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --success: #10b981;
-            --error: #ef4444;
-            --glass-border: rgba(255, 255, 255, 0.1);
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Asset Scanner Pro | Live</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --secondary: #ec4899;
+      --bg-dark: #0f172a;
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --success: #10b981;
+      --error: #ef4444;
+      --glass-border: rgba(255, 255, 255, 0.1);
+    }
 
-        * {
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
 
-        body {
-            font-family: 'Outfit', sans-serif;
-            background-color: var(--bg-dark);
-            background-image: 
-                radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
-                radial-gradient(circle at 90% 80%, rgba(236, 72, 153, 0.1) 0%, transparent 40%);
-            color: var(--text-main);
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow-x: hidden;
-        }
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: var(--bg-dark);
+      background-image:
+        radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(236, 72, 153, 0.1) 0%, transparent 40%);
+      color: var(--text-main);
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
 
-        header {
-            padding: 1.5rem;
-            text-align: center;
-            background: rgba(15, 23, 42, 0.8);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid var(--glass-border);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
+    header {
+      padding: 1.5rem;
+      text-align: center;
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--glass-border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
 
-        header h1 {
-            margin: 0;
-            font-size: 1.5rem;
-            font-weight: 700;
-            background: linear-gradient(to right, #818cf8, #f472b6);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: -0.02em;
-        }
+    header h1 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 700;
+      background: linear-gradient(to right, #818cf8, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.02em;
+    }
 
-        header p {
-            margin: 0.2rem 0 0;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            font-weight: 300;
-        }
+    header p {
+      margin: 0.2rem 0 0;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 300;
+    }
 
-        main {
-            flex: 1;
-            padding: 1.5rem;
-            max-width: 600px;
-            margin: 0 auto;
-            width: 100%;
-        }
+    main {
+      flex: 1;
+      padding: 1.5rem;
+      max-width: 600px;
+      margin: 0 auto;
+      width: 100%;
+    }
 
-        /* Scanner Container */
-        .scanner-card {
-            background: var(--card-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 24px;
-            overflow: hidden;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
-            margin-bottom: 1.5rem;
-            backdrop-filter: blur(20px);
-            position: relative;
-        }
+    .scanner-card {
+      background: var(--card-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+      margin-bottom: 1.5rem;
+      backdrop-filter: blur(20px);
+    }
 
-        #reader {
-            width: 100%;
-            border: none !important;
-            background: #000;
-        }
+    #reader {
+      width: 100%;
+      border: none !important;
+      background: #000;
+    }
 
-        #reader video {
-            object-fit: cover !important;
-        }
+    #reader video {
+      object-fit: cover !important;
+    }
 
-        /* Customize html5-qrcode UI */
-        #reader__dashboard {
-            padding: 1.5rem !important;
-            background: transparent !important;
-        }
+    #reader__dashboard {
+      padding: 1.5rem !important;
+      background: transparent !important;
+    }
 
-        #reader__dashboard_section_csr button {
-            background: var(--primary) !important;
-            color: white !important;
-            border: none !important;
-            padding: 0.8rem 1.5rem !important;
-            border-radius: 12px !important;
-            font-family: 'Outfit', sans-serif !important;
-            font-weight: 600 !important;
-            cursor: pointer !important;
-            transition: all 0.2s !important;
-            text-transform: uppercase !important;
-            letter-spacing: 0.05em !important;
-            font-size: 0.85rem !important;
-            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4) !important;
-        }
+    #reader__dashboard_section_csr button {
+      background: var(--primary) !important;
+      color: white !important;
+      border: none !important;
+      padding: 0.8rem 1.5rem !important;
+      border-radius: 12px !important;
+      font-family: 'Outfit', sans-serif !important;
+      font-weight: 600 !important;
+      cursor: pointer !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.05em !important;
+      font-size: 0.85rem !important;
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4) !important;
+    }
 
-        #reader__dashboard_section_csr button:active {
-            transform: scale(0.95) !important;
-        }
+    .input-group {
+      margin-bottom: 1.5rem;
+      display: flex;
+      gap: 0.5rem;
+    }
 
-        /* Manual Input Section */
-        .input-group {
-            margin-bottom: 1.5rem;
-            display: flex;
-            gap: 0.5rem;
-        }
+    input[type="text"] {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 0.8rem 1rem;
+      color: white;
+      font-family: inherit;
+      font-size: 1rem;
+      outline: none;
+      transition: all 0.2s;
+    }
 
-        input[type="text"] {
-            flex: 1;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            padding: 0.8rem 1rem;
-            color: white;
-            font-family: inherit;
-            font-size: 1rem;
-            outline: none;
-            transition: all 0.2s;
-        }
+    input[type="text"]:focus {
+      border-color: var(--primary);
+      background: rgba(255, 255, 255, 0.1);
+      box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+    }
 
-        input[type="text"]:focus {
-            border-color: var(--primary);
-            background: rgba(255, 255, 255, 0.1);
-            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
-        }
+    .btn-search {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      width: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: white;
+    }
 
-        .btn-search {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            width: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
+    .btn-search:active {
+      transform: scale(0.9);
+    }
 
-        .btn-search:active {
-            transform: scale(0.9);
-        }
+    #result {
+      display: none;
+      animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
 
-        /* Result Area */
-        #result {
-            display: none;
-            animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        }
+    @keyframes slideUp {
+      from {
+        transform: translateY(20px);
+        opacity: 0;
+      }
 
-        @keyframes slideUp {
-            from { transform: translateY(20px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
 
-        .result-card {
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(236, 72, 153, 0.05));
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 24px;
-            padding: 1.5rem;
-            backdrop-filter: blur(20px);
-        }
+    .result-card {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(236, 72, 153, 0.05));
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 1.5rem;
+      backdrop-filter: blur(20px);
+    }
 
-        .asset-title {
-            font-size: 1.25rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-            line-height: 1.4;
-        }
+    .asset-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      line-height: 1.4;
+    }
 
-        .asset-code {
-            font-family: monospace;
-            background: rgba(0, 0, 0, 0.2);
-            padding: 0.2rem 0.6rem;
-            border-radius: 6px;
-            font-size: 0.9rem;
-            color: var(--primary);
-        }
+    .asset-code {
+      font-family: monospace;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      color: var(--primary);
+    }
 
-        .info-grid {
-            margin-top: 1.5rem;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-        }
+    .info-grid {
+      margin-top: 1.5rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
 
-        .info-item {
-            display: flex;
-            flex-direction: column;
-        }
+    .info-item {
+      display: flex;
+      flex-direction: column;
+    }
 
-        .info-label {
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.2rem;
-        }
+    .info-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.2rem;
+    }
 
-        .info-value {
-            font-weight: 600;
-            font-size: 0.95rem;
-        }
+    .info-value {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
 
-        .status-badge {
-            display: inline-block;
-            padding: 0.2rem 0.6rem;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
+    .status-badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
 
-        .status-checked { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-        .status-pending { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    .status-checked {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+    }
 
-        .btn-confirm {
-            margin-top: 1.5rem;
-            width: 100%;
-            background: linear-gradient(to right, var(--primary), var(--secondary));
-            color: white;
-            border: none;
-            border-radius: 16px;
-            padding: 1.2rem;
-            font-size: 1rem;
-            font-weight: 700;
-            cursor: pointer;
-            box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-        }
+    .status-pending {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+    }
 
-        .btn-confirm:active {
-            transform: scale(0.98);
-            box-shadow: 0 5px 10px rgba(99, 102, 241, 0.2);
-        }
+    .btn-confirm {
+      margin-top: 1.5rem;
+      width: 100%;
+      background: linear-gradient(to right, var(--primary), var(--secondary));
+      color: white;
+      border: none;
+      border-radius: 16px;
+      padding: 1.2rem;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
 
-        .btn-confirm:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            background: #475569;
-        }
+    .btn-confirm:active {
+      transform: scale(0.98);
+    }
 
-        /* Status Overlay */
-        #loadingOverlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(15, 23, 42, 0.8);
-            backdrop-filter: blur(5px);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-        }
+    .btn-confirm:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background: #475569;
+    }
 
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid rgba(255, 255, 255, 0.1);
-            border-left-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
+    #loadingOverlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(5px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
 
-        @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(255, 255, 255, 0.1);
+      border-left-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
 
-        /* Toast Notifications */
-        #toast {
-            position: fixed;
-            bottom: 2rem;
-            left: 50%;
-            transform: translateX(-50%) translateY(100px);
-            background: #1e293b;
-            color: white;
-            padding: 1rem 1.5rem;
-            border-radius: 16px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-            border: 1px solid var(--glass-border);
-            z-index: 2000;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            font-weight: 500;
-            min-width: 280px;
-            text-align: center;
-        }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
 
-        #toast.show {
-            transform: translateX(-50%) translateY(0);
-        }
-    </style>
+    #toast {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(120px);
+      background: #1e293b;
+      color: white;
+      padding: 1rem 1.5rem;
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--glass-border);
+      z-index: 2000;
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      font-weight: 500;
+      min-width: 280px;
+      text-align: center;
+    }
+
+    #toast.show {
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
 </head>
+
 <body>
 
-    <header>
-        <h1>Asset Scanner Pro</h1>
-        <p>Hệ thống Kiểm kê Tài sản Cơ quan</p>
-    </header>
+  <header>
+    <h1>Asset Scanner Pro</h1>
+    <p>Hệ thống Kiểm kê Tài sản Cơ quan</p>
+  </header>
 
-    <main>
-        <!-- Scanner -->
-        <div class="scanner-card">
-            <div id="reader"></div>
-        </div>
-
-        <!-- Manual Input -->
-        <div class="input-group">
-            <input type="text" id="manualBarcode" placeholder="Nhập mã tài sản bằng tay...">
-            <button class="btn-search" onclick="searchManual()">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            </button>
-        </div>
-
-        <!-- Result Section -->
-        <div id="result">
-            <div class="result-card">
-                <div id="assetName" class="asset-title">Tên tài sản xuất hiện ở đây</div>
-                <span id="barcodeValue" class="asset-code">TS-00123</span>
-
-                <div class="info-grid">
-                    <div class="info-item">
-                        <span class="info-label">Trạng thái hiện tại</span>
-                        <div id="assetStatus" class="info-value">
-                            <span class="status-badge status-pending">Chưa kiểm</span>
-                        </div>
-                    </div>
-                </div>
-
-                <button id="btnConfirm" class="btn-confirm" onclick="confirmScan()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                    Xác nhận Đã kiểm
-                </button>
-            </div>
-        </div>
-    </main>
-
-    <!-- Overlay & Toast -->
-    <div id="loadingOverlay">
-        <div class="spinner"></div>
-        <p style="margin-top: 1rem">Đang xử lý...</p>
+  <main>
+    <div class="scanner-card">
+      <div id="reader"></div>
     </div>
 
-    <div id="toast">Thông báo ở đây</div>
+    <div class="input-group">
+      <input type="text" id="manualBarcode" placeholder="Nhập mã tài sản bằng tay...">
+      <button class="btn-search" onclick="searchManual()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+          stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+      </button>
+    </div>
 
-    <script>
-        // --- CẤU HÌNH ---
-        // THAY URL WEB APP CỦA BẠN VÀO ĐÂY (SAU KHI DEPLOY LẠI)
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbzf4T2D8C0oHw7oP9_Pz6eB-OqF9v5vH-C9A-O-e-5-v-E-6-e-7/exec"; 
-        
-        // --- LOGIC ---
-        let html5QrcodeScanner = null;
-        let currentAssetRow = null;
-        let lastScannedCode = null;
+    <div id="result">
+      <div class="result-card">
+        <div id="assetName" class="asset-title"></div>
+        <span id="barcodeValue" class="asset-code"></span>
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="info-label">Trạng thái hiện tại</span>
+            <div id="assetStatus" class="info-value"></div>
+          </div>
+        </div>
+        <button id="btnConfirm" class="btn-confirm" onclick="confirmScan()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          Xác nhận Đã kiểm
+        </button>
+      </div>
+    </div>
+  </main>
 
-        document.addEventListener('DOMContentLoaded', initScanner);
+  <div id="loadingOverlay">
+    <div class="spinner"></div>
+    <p style="margin-top: 1rem; color: var(--text-muted);">Đang xử lý...</p>
+  </div>
+  <div id="toast"></div>
 
-        function initScanner() {
-            html5QrcodeScanner = new Html5QrcodeScanner(
-                "reader", 
-                { 
-                    fps: 10, 
-                    qrbox: { width: 250, height: 150 },
-                    aspectRatio: 1.0,
-                    formatsToSupport: [ 
-                        Html5QrcodeSupportedFormats.CODE_128,
-                        Html5QrcodeSupportedFormats.EAN_13,
-                        Html5QrcodeSupportedFormats.CODE_39
-                    ],
-                    rememberLastUsedCamera: true,
-                    showTorchButtonIfSupported: true
-                }
-            );
-            html5QrcodeScanner.render(onScanSuccess, onScanError);
+  <script>
+    // ================================================================
+    // *** QUAN TRỌNG: DÁN URL GOOGLE APPS SCRIPT CỦA BẠN VÀO ĐÂY ***
+    // Lấy ở: Apps Script > Triển khai > Quản lý bản triển khai > URL
+    // ================================================================
+    const GAS_URL = "https://script.google.com/macros/s/AKfycby835mW427pfBtqd9R_o2zDnNnIbWBHjQw-NpbHAEIY2vPP0yvezE2fFmA8O6znB4MFVQ/exec";
+
+    // ----------------------------------------------------------------
+    let html5QrcodeScanner = null;
+    let currentAssetRow = null;
+    let lastScannedCode = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!GAS_URL || GAS_URL === "PASTE_YOUR_GAS_URL_HERE" || !GAS_URL.includes("script.google.com")) {
+        showToast("⚠️ Chưa cấu hình GAS URL. Liên hệ quản trị viên.", "error");
+      }
+      initScanner();
+    });
+
+    function initScanner() {
+      html5QrcodeScanner = new Html5QrcodeScanner(
+        "reader",
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 150 },
+          aspectRatio: 1.0,
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.CODE_39
+          ],
+          rememberLastUsedCamera: true,
+          showTorchButtonIfSupported: true
         }
+      );
+      html5QrcodeScanner.render(onScanSuccess, onScanError);
+    }
 
-        function onScanSuccess(decodedText, decodedResult) {
-            if (decodedText !== lastScannedCode) {
-                lastScannedCode = decodedText;
-                vibrate(); // Rung phản hồi
-                lookupAsset(decodedText);
-            }
+    function onScanSuccess(decodedText) {
+      if (decodedText !== lastScannedCode) {
+        lastScannedCode = decodedText;
+        vibrate();
+        lookupAsset(decodedText);
+      }
+    }
+
+    function onScanError() { /* bình thường, bỏ qua */ }
+
+    function searchManual() {
+      const code = document.getElementById('manualBarcode').value.trim();
+      if (code) {
+        lastScannedCode = null; // cho phép tra lại cùng mã khi nhập tay
+        lookupAsset(code);
+      }
+    }
+
+    // --- Tra cứu tài sản ---
+    function lookupAsset(barcode) {
+      showLoading(true);
+      document.getElementById('result').style.display = 'none';
+
+      callGAS({ action: 'lookup', barcode: barcode }, (res) => {
+        showLoading(false);
+        if (!res) return; // timeout đã xử lý
+        if (res.found) {
+          displayResult(res);
+          showToast("✓ Tìm thấy tài sản", "success");
+        } else if (res.error) {
+          showToast("Lỗi: " + res.error, "error");
+          lastScannedCode = null;
+        } else {
+          showToast("Không tìm thấy mã: " + barcode, "error");
+          lastScannedCode = null;
         }
+      });
+    }
 
-        function onScanError(err) {
-            // Lỗi quét này bình thường khi đang di chuyển camera, không cần báo
-        }
+    // --- Xác nhận đã kiểm ---
+    function confirmScan() {
+      if (!currentAssetRow) return;
+      showLoading(true);
+      const btn = document.getElementById('btnConfirm');
+      btn.disabled = true;
 
-        function searchManual() {
-            const code = document.getElementById('manualBarcode').value.trim();
-            if (code) lookupAsset(code);
-        }
-
-        // --- GIAO TIẾP VỚI GOOGLE APPS SCRIPT (SỬ DỤNG JSONP ĐỂ BYPASS CORS) ---
-        function lookupAsset(barcode) {
-            showLoading(true);
-            
-            // Xóa kết quả cũ
+      callGAS({ action: 'confirm', row: currentAssetRow }, (res) => {
+        showLoading(false);
+        if (!res) { btn.disabled = false; return; }
+        if (res.success) {
+          showToast("✅ Cập nhật thành công!", "success");
+          document.getElementById('assetStatus').innerHTML = '<span class="status-badge status-checked">Đã kiểm</span>';
+          setTimeout(() => {
+            lastScannedCode = null;
             document.getElementById('result').style.display = 'none';
-            
-            callGAS({ action: 'lookup', barcode: barcode }, (res) => {
-                showLoading(false);
-                if (res.found) {
-                    displayResult(res);
-                    showToast("Tìm thấy tài sản", "success");
-                } else if (res.error) {
-                    showToast(res.error, "error");
-                } else {
-                    showToast("Không tìm thấy mã: " + barcode, "error");
-                }
-            });
+            document.getElementById('manualBarcode').value = '';
+          }, 2000);
+        } else {
+          showToast((res.error) || "Gặp lỗi khi lưu.", "error");
+          btn.disabled = false;
         }
+      });
+    }
 
-        function confirmScan() {
-            if (!currentAssetRow) return;
-            
-            showLoading(true);
-            const btn = document.getElementById('btnConfirm');
-            btn.disabled = true;
+    // --- JSONP wrapper (bypass CORS) với timeout 15 giây ---
+    function callGAS(params, callback) {
+      const cbName = 'gas_cb_' + Date.now() + '_' + Math.floor(Math.random() * 9999);
+      let settled = false;
+      let scriptEl = null;
 
-            callGAS({ action: 'confirm', row: currentAssetRow }, (res) => {
-                showLoading(false);
-                if (res.success) {
-                    showToast("Cập nhật thành công!", "success");
-                    document.getElementById('assetStatus').innerHTML = '<span class="status-badge status-checked">Đã kiểm</span>';
-                    // Reset scanner sau 2 giây để quét tiếp
-                    setTimeout(() => {
-                        lastScannedCode = null;
-                        document.getElementById('result').style.display = 'none';
-                        document.getElementById('manualBarcode').value = '';
-                    }, 2000);
-                } else {
-                    showToast(res.error || "Gặp lỗi khi lưu", "error");
-                    btn.disabled = false;
-                }
-            });
+      function cleanup() {
+        delete window[cbName];
+        if (scriptEl && scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
+      }
+
+      // Timeout: nếu sau 15 giây không có phản hồi → báo lỗi
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          cleanup();
+          showLoading(false);
+          showToast("⏱️ Hết thời gian chờ. Kiểm tra kết nối & GAS URL.", "error");
+          lastScannedCode = null;
+          callback(null);
         }
+      }, 15000);
 
-        // Hàm gọi GAS bằng thẻ Script (JSONP) - Tuyệt kỹ để tránh lỗi CORS
-        function callGAS(params, callback) {
-            const callbackName = 'gas_callback_' + Math.round(Math.random() * 1000000);
-            window[callbackName] = function(data) {
-                delete window[callbackName];
-                document.body.removeChild(script);
-                callback(data);
-            };
-
-            const queryString = Object.keys(params)
-                .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(params[key]))
-                .join('&');
-            
-            const script = document.createElement('script');
-            script.src = `${GAS_URL}?${queryString}&callback=${callbackName}`;
-            document.body.appendChild(script);
+      window[cbName] = function (data) {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          cleanup();
+          callback(data);
         }
+      };
 
-        // --- UI HELPERS ---
-        function displayResult(asset) {
-            currentAssetRow = asset.row;
-            document.getElementById('assetName').innerText = asset.assetName;
-            document.getElementById('barcodeValue').innerText = asset.barcode;
-            
-            const isChecked = asset.status === 'Đã kiểm';
-            const statusHtml = isChecked 
-                ? '<span class="status-badge status-checked">Đã kiểm</span>'
-                : '<span class="status-badge status-pending">Chưa kiểm</span>';
-            
-            document.getElementById('assetStatus').innerHTML = statusHtml;
-            document.getElementById('btnConfirm').disabled = isChecked;
-            document.getElementById('result').style.display = 'block';
-        }
+      const qs = Object.keys(params)
+        .map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k]))
+        .join('&');
 
-        function showLoading(show) {
-            document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+      scriptEl = document.createElement('script');
+      scriptEl.onerror = function () {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          cleanup();
+          showLoading(false);
+          showToast("❌ Không kết nối được GAS. Kiểm tra URL & quyền truy cập.", "error");
+          lastScannedCode = null;
+          callback(null);
         }
+      };
+      scriptEl.src = GAS_URL + '?' + qs + '&callback=' + cbName;
+      document.body.appendChild(scriptEl);
+    }
 
-        function showToast(msg, type) {
-            const toast = document.getElementById('toast');
-            toast.innerText = msg;
-            toast.style.borderColor = type === 'success' ? 'var(--success)' : 'var(--error)';
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 3000);
-        }
+    // --- UI helpers ---
+    function displayResult(asset) {
+      currentAssetRow = asset.row;
+      document.getElementById('assetName').innerText = asset.assetName;
+      document.getElementById('barcodeValue').innerText = asset.barcode;
+      const isChecked = String(asset.status).trim() === 'Đã kiểm';
+      document.getElementById('assetStatus').innerHTML = isChecked
+        ? '<span class="status-badge status-checked">Đã kiểm</span>'
+        : '<span class="status-badge status-pending">Chưa kiểm</span>';
+      document.getElementById('btnConfirm').disabled = isChecked;
+      document.getElementById('result').style.display = 'block';
+    }
 
-        function vibrate() {
-            if (navigator.vibrate) navigator.vibrate(100);
-        }
-    </script>
+    function showLoading(show) {
+      document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+    }
+
+    function showToast(msg, type) {
+      const toast = document.getElementById('toast');
+      toast.innerText = msg;
+      toast.style.borderColor = type === 'success' ? 'var(--success)' : 'var(--error)';
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3500);
+    }
+
+    function vibrate() {
+      if (navigator.vibrate) navigator.vibrate(100);
+    }
+  </script>
 </body>
+
 </html>
