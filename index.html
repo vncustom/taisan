@@ -413,6 +413,7 @@
       background: rgba(0,0,0,.25); display: inline-block;
       padding: .1rem .45rem; border-radius: 5px; margin-bottom: .2rem; }
     .asset-nm { font-size: .88rem; font-weight: 600; line-height: 1.35; }
+    .asset-loc { font-size: .76rem; color: var(--text-muted); margin-top: .15rem; }
     .detail-empty {
       text-align: center; padding: 3rem 1rem; color: var(--text-muted);
     }
@@ -1068,6 +1069,7 @@
         <div class="asset-info">
           <div class="asset-bc">${a.barcode}</div>
           <div class="asset-nm">${a.assetName || '(Chưa có tên tài sản)'}</div>
+          ${a.location ? `<div class="asset-loc">📍 ${a.location}</div>` : ''}
         </div>
       </div>`;
     });

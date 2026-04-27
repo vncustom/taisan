@@ -233,13 +233,14 @@ function getManagerAssets(manager) {
       const barcode   = String(row[4]).trim();   // cột E
       const assetName = String(row[5]).trim();   // cột F
       const mgr       = String(row[11]).trim();  // cột L
+      const location  = String(row[12]).trim();  // cột M - vị trí
       const status    = String(row[21]).trim();  // cột V
 
       if (!barcode) return;
       if (mgr !== String(manager).trim()) return;
       if (status === 'Đã kiểm') return;
 
-      assets.push({ barcode: barcode, assetName: assetName, row: startRow + i });
+      assets.push({ barcode: barcode, assetName: assetName, location: location, row: startRow + i });
     });
 
     return { success: true, manager: manager, assets: assets };
