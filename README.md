@@ -43,14 +43,46 @@ Mặc dù Google Apps Script (GAS) có thể render HTML trực tiếp, nhưng v
 
 ## 🛠️ Hướng dẫn thiết lập
 
-1.  **Google Sheets:** Đảm bảo có 2 sheet tên là `Chinh cho 3 phong` và `Phong` với cấu trúc như đã thống nhất.
-2.  **Google Apps Script (Code.gs):**
-    *   Copy nội dung file `Code.gs` vào dự án GAS của bạn.
-    *   Thay đổi `spreadsheetId` trong code thành ID bảng tính của bạn.
-    *   **Deploy** dưới dạng "Web App", cấu hình quyền truy cập thành **"Anyone"**.
-    *   Copy URL của Web App sau khi deploy.
-3.  **GitHub Pages (index.html):**
-    *   Mở file `index.html`, tìm biến `GAS_URL` và dán URL Web App của bạn vào.
-    *   Push mã nguồn lên GitHub và bật tính năng GitHub Pages trong phần Settings.
+### 1. Cấu trúc Google Sheets (Database)
+Ứng dụng sử dụng 2 Sheet với cấu trúc cột chính xác như sau:
+
+#### Sheet: `Chinh cho 3 phong` (Dữ liệu tài sản)
+*   **Cột E (Cột 5):** Mã vạch / Mã tài sản (Barcode).
+*   **Cột F (Cột 6):** Tên tài sản.
+*   **Cột L (Cột 12):** Người quản lý (Dùng để lọc dữ liệu từng cá nhân).
+*   **Cột M (Cột 13):** Vị trí tài sản (Hiển thị chi tiết khi xem danh sách theo người).
+*   **Cột V (Cột 22):** Trạng thái kiểm kê (Hệ thống sẽ ghi "Đã kiểm" vào đây).
+
+#### Sheet: `Phong` (Danh mục nhân viên theo phòng)
+*   **Hàng 1:** Tên các Phòng/Ban (Mỗi cột là một phòng).
+*   **Hàng 2 trở đi:** Tên nhân viên thuộc phòng đó (Liệt kê theo chiều dọc dưới tên phòng).
+
+### 2. Google Apps Script (Backend)
+*   Copy nội dung file `Code.gs` vào dự án GAS của bạn.
+*   Thay đổi `spreadsheetId` trong code thành ID bảng tính của bạn.
+*   **Deploy** dưới dạng "Web App", cấu hình quyền truy cập thành **"Anyone"**.
+*   Copy URL của Web App sau khi deploy.
+
+### 3. Frontend (index.html)
+*   Mở file `index.html`, tìm biến `GAS_URL` và dán URL Web App bạn vừa copy ở bước trên vào.
+*   Host file này lên GitHub Pages hoặc bất kỳ dịch vụ hosting nào hỗ trợ HTTPS.
+
+## 📱 Hướng dẫn sử dụng
+
+### 1. Quét mã tài sản
+*   Truy cập vào ứng dụng, nhấn **"Mở Camera"** và cấp quyền truy cập camera.
+*   Đưa mã vạch vào khung quét. Bạn có thể sử dụng biểu tượng **Đèn Flash** ⚡ nếu thiếu sáng hoặc **Zoom** 🔍 nếu mã vạch ở xa.
+*   Sau khi phát hiện mã, hệ thống sẽ hiển thị thông tin: Tên tài sản, Mã và Trạng thái.
+*   Nhấn **"Xác nhận Đã kiểm"** để gửi dữ liệu về Google Sheet.
+
+### 2. Dashboard và Theo dõi tiến độ
+*   Nhấn nút **"Dashboard"** ở góc trên bên phải màn hình.
+*   **Báo cáo tổng quát:** Xem tổng số tài sản, số lượng đã kiểm và tỉ lệ phần trăm hoàn thành.
+*   **Theo phòng ban:** Xem thanh tiến trình của từng phòng.
+*   **Theo từng người:** Danh sách các cá nhân quản lý tài sản.
+    *   Bạn có thể tìm kiếm tên hoặc lọc theo phòng ban.
+    *   **Nhấn vào tên một người** để xem danh sách chi tiết các tài sản **Chưa kiểm** của người đó (bao gồm Tên, Mã và Vị trí tài sản).
+    *   Nhấn nút **"Tải lại"** 🔄 trong Dashboard để nhận dữ liệu mới nhất nếu có người khác vừa cập nhật.
+
 
 
