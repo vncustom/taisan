@@ -14,6 +14,8 @@ function doGet(e) {
       result = getDashboardData();
     } else if (action === 'managerAssets') {
       result = getManagerAssets(e.parameter.manager);
+    } else if (action === 'newscan') {
+      result = recordNewscan(e.parameter.barcode);
     }
     
     // Xử lý JSONP nếu có callback parameter (giải quyết CORS cho GitHub Pages)
@@ -246,5 +248,44 @@ function getManagerAssets(manager) {
     return { success: true, manager: manager, assets: assets };
   } catch (err) {
     return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Ghi mã tài sản mới (không có trong danh sách) vào Sheet "Newscan".
+ * Sheet "Newscan" có 2 cột: A = mã tài sản, B = ngày quét.
+ */
+function recordNewscan(barcode) {
+  if (!barcode) return { success: false, error: 'Thiếu mã tài sản' };
+
+  const spreadsheetId = '1iaLw6iQLnTMTtOTYJLanfoULWCrAOsTa33tubSpxRnQ';
+  const sheetName = 'Newscan';
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    return { success: false, error: 'Hệ thống đang bận. Vui lòng thử lại.' };
+  }
+
+  try {
+    const ss = SpreadsheetApp.openById(spreadsheetId);
+    let sheet = ss.getSheetByName(sheetName);
+
+    // Tạo sheet nếu chưa tồn tại
+    if (!sheet) {
+      sheet = ss.insertSheet(sheetName);
+      sheet.getRange(1, 1).setValue('Mã tài sản');
+      sheet.getRange(1, 2).setValue('Ngày quét');
+    }
+
+    const scanDate = Utilities.formatDate(
+      new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss'
+    );
+
+    sheet.appendRow([String(barcode).trim(), scanDate]);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  } finally {
+    lock.releaseLock();
   }
 }

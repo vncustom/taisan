@@ -456,6 +456,30 @@
       position: absolute; right: 1rem; top: 50%; transform: translateY(-50%);
     }
     .btn-dash-open:hover { background: rgba(99,102,241,.35); }
+
+    /* ── Newscan button ── */
+    #btnNewscan {
+      display: none;
+      position: fixed;
+      bottom: 6rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2100;
+      background: linear-gradient(to right, #f59e0b, #ef4444);
+      color: white;
+      border: none;
+      border-radius: 14px;
+      padding: 0.75rem 1.4rem;
+      font-family: inherit;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: 0 8px 20px rgba(239,68,68,0.35);
+      animation: slideUp 0.35s cubic-bezier(0.16,1,0.3,1);
+      transition: opacity 0.3s;
+    }
+    #btnNewscan:active { transform: translateX(-50%) scale(0.96); }
   </style>
 </head>
 
@@ -577,6 +601,7 @@
     <p style="margin-top:1rem;color:var(--text-muted)">Đang xử lý…</p>
   </div>
   <div id="toast"></div>
+  <button id="btnNewscan" onclick="registerNewscan()">📋 Có khai báo mới không?</button>
 
   <script>
   // ================================================================
@@ -785,6 +810,7 @@
       } else {
         showToast('Không tìm thấy mã: ' + barcode, 'error');
         lastScannedCode = null; scanPaused = false;
+        showNewscanBtn(barcode);
       }
     });
   }
@@ -881,6 +907,38 @@
   }
 
   function vibrate() { if (navigator.vibrate) navigator.vibrate([60, 30, 60]); }
+
+  // ---------- Newscan button ----------
+  let _newscanCode = null;
+  let _newscanTimer = null;
+
+  function showNewscanBtn(barcode) {
+    _newscanCode = barcode;
+    const btn = document.getElementById('btnNewscan');
+    btn.style.display = 'block';
+    // Tự ẩn sau 8 giây nếu người dùng không bấm
+    clearTimeout(_newscanTimer);
+    _newscanTimer = setTimeout(() => { btn.style.display = 'none'; _newscanCode = null; }, 8000);
+  }
+
+  function registerNewscan() {
+    if (!_newscanCode) return;
+    clearTimeout(_newscanTimer);
+    const btn = document.getElementById('btnNewscan');
+    btn.style.display = 'none';
+    const code = _newscanCode;
+    _newscanCode = null;
+
+    showLoading(true);
+    callGAS({ action: 'newscan', barcode: code }, (res) => {
+      showLoading(false);
+      if (res && res.success) {
+        showToast('✅ Đã ghi mã ' + code + ' vào Newscan!', 'success');
+      } else {
+        showToast('❌ ' + ((res && res.error) ? res.error : 'Lỗi ghi Newscan'), 'error');
+      }
+    });
+  }
 
   // ════════════════════════════════════════════════════════
   //  DASHBOARD
