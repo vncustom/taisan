@@ -44,7 +44,7 @@ Mặc dù Google Apps Script (GAS) có thể render HTML trực tiếp, nhưng v
 ## 🛠️ Hướng dẫn thiết lập
 
 ### 1. Cấu trúc Google Sheets (Database)
-Ứng dụng sử dụng 2 Sheet với cấu trúc cột chính xác như sau:
+Ứng dụng sử dụng 3 Sheet với cấu trúc cột chính xác như sau:
 
 #### Sheet: `Chinh cho 3 phong` (Dữ liệu tài sản)
 *   **Cột E (Cột 5):** Mã vạch / Mã tài sản (Barcode).
@@ -52,16 +52,23 @@ Mặc dù Google Apps Script (GAS) có thể render HTML trực tiếp, nhưng v
 *   **Cột L (Cột 12):** Người quản lý (Dùng để lọc dữ liệu từng cá nhân).
 *   **Cột M (Cột 13):** Vị trí tài sản (Hiển thị chi tiết khi xem danh sách theo người).
 *   **Cột V (Cột 22):** Trạng thái kiểm kê (Hệ thống sẽ ghi "Đã kiểm" vào đây).
+*   **Cột W (Cột 23):** Ngày giờ quét thực tế (Hệ thống tự động ghi nhận dưới định dạng `dd/MM/yyyy HH:mm:ss` khi bấm "Xác nhận Đã kiểm").
 
 #### Sheet: `Phong` (Danh mục nhân viên theo phòng)
 *   **Hàng 1:** Tên các Phòng/Ban (Mỗi cột là một phòng).
 *   **Hàng 2 trở đi:** Tên nhân viên thuộc phòng đó (Liệt kê theo chiều dọc dưới tên phòng).
+
+#### Sheet: `Newscan` (Khai báo mã mới - Tự động tạo nếu chưa tồn tại)
+*   Lưu trữ các mã tài sản được quét nhưng không tìm thấy thông tin trong hệ thống, cho phép kiểm kê viên khai báo nhanh.
+*   **Cột A (Cột 1):** Mã tài sản mới quét.
+*   **Cột B (Cột 2):** Ngày giờ thực hiện khai báo (`dd/MM/yyyy HH:mm:ss`).
 
 ### 2. Google Apps Script (Backend)
 *   Copy nội dung file `Code.gs` vào dự án GAS của bạn.
 *   Thay đổi `spreadsheetId` trong code thành ID bảng tính của bạn.
 *   **Deploy** dưới dạng "Web App", cấu hình quyền truy cập thành **"Anyone"**.
 *   Copy URL của Web App sau khi deploy.
+*   *Lưu ý:* Bất cứ khi nào bạn cập nhật mã nguồn trong `Code.gs`, bạn phải tiến hành **Deploy lại** (chọn *New version* trong *Manage Deployments*) để các thay đổi phía Backend có hiệu lực.
 
 ### 3. Frontend (index.html)
 *   Mở file `index.html`, tìm biến `GAS_URL` và dán URL Web App bạn vừa copy ở bước trên vào.
@@ -69,20 +76,21 @@ Mặc dù Google Apps Script (GAS) có thể render HTML trực tiếp, nhưng v
 
 ## 📱 Hướng dẫn sử dụng
 
-### 1. Quét mã tài sản
+### 1. Quét mã tài sản và Kiểm kê
 *   Truy cập vào ứng dụng, nhấn **"Mở Camera"** và cấp quyền truy cập camera.
 *   Đưa mã vạch vào khung quét. Bạn có thể sử dụng biểu tượng **Đèn Flash** ⚡ nếu thiếu sáng hoặc **Zoom** 🔍 nếu mã vạch ở xa.
-*   Sau khi phát hiện mã, hệ thống sẽ hiển thị thông tin: Tên tài sản, Mã và Trạng thái.
-*   Nhấn **"Xác nhận Đã kiểm"** để gửi dữ liệu về Google Sheet.
+*   **Khi tìm thấy tài sản trong danh sách:**
+    *   Hệ thống hiển thị thông tin: Tên tài sản, Mã và Trạng thái.
+    *   Nhấn **"Xác nhận Đã kiểm"** để gửi dữ liệu về Google Sheet. Hệ thống sẽ ghi trạng thái `"Đã kiểm"` vào Cột V và tự động chèn **Ngày giờ quét thực tế** vào Cột W.
+*   **Khi mã không tồn tại trong danh sách:**
+    *   Hệ thống sẽ hiện cảnh báo không tìm thấy mã, kèm theo nút **"📋 Khai báo mới?"** (Nút này tự động ẩn đi sau 8 giây).
+    *   Nhấp vào nút **"📋 Khai báo mới?"** nếu muốn lưu mã này vào Sheet `Newscan` kèm thời gian thực hiện, giúp dễ dàng theo dõi và bổ sung danh mục tài sản mới sau này.
 
 ### 2. Dashboard và Theo dõi tiến độ
 *   Nhấn nút **"Dashboard"** ở góc trên bên phải màn hình.
 *   **Báo cáo tổng quát:** Xem tổng số tài sản, số lượng đã kiểm và tỉ lệ phần trăm hoàn thành.
 *   **Theo phòng ban:** Xem thanh tiến trình của từng phòng.
 *   **Theo từng người:** Danh sách các cá nhân quản lý tài sản.
-    *   Bạn có thể tìm kiếm tên hoặc lọc theo phòng ban.
-    *   **Nhấn vào tên một người** để xem danh sách chi tiết các tài sản **Chưa kiểm** của người đó (bao gồm Tên, Mã và Vị trí tài sản).
-    *   Nhấn nút **"Tải lại"** 🔄 trong Dashboard để nhận dữ liệu mới nhất nếu có người khác vừa cập nhật.
-
-
-
+*   Bạn có thể tìm kiếm tên hoặc lọc theo phòng ban.
+*   **Nhấn vào tên một người** để xem danh sách chi tiết các tài sản **Chưa kiểm** của người đó (bao gồm Tên, Mã và Vị trí tài sản).
+*   Nhấn nút **"Tải lại"** 🔄 trong Dashboard để nhận dữ liệu mới nhất nếu có người khác vừa cập nhật.
