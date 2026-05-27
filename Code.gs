@@ -92,7 +92,12 @@ function confirmAsset(row) {
   if (lock.tryLock(10000)) {
     try {
       const sheet = SpreadsheetApp.openById(spreadsheetId).getSheetByName(sheetName);
-      sheet.getRange(parseInt(row), 22).setValue('Đã kiểm');
+      const actualRow = parseInt(row);
+      const scanTime = Utilities.formatDate(
+        new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss'
+      );
+      sheet.getRange(actualRow, 22).setValue('Đã kiểm');   // Cột V
+      sheet.getRange(actualRow, 23).setValue(scanTime);     // Cột W – ngày giờ quét
       return { success: true };
     } catch (e) {
       return { success: false, error: e.message };
