@@ -63,6 +63,7 @@ function lookupBarcode(barcode) {
       const rowBarcode = String(data[i][4]).trim();
       if (rowBarcode === String(barcode).trim() && rowBarcode !== '') {
         const assetName = data[i][5];
+        const manager = data[i][11];
         const currentStatus = data[i][21];
         const actualRow = startRow + i;
         
@@ -70,6 +71,7 @@ function lookupBarcode(barcode) {
           found: true,
           row: actualRow,
           assetName: assetName,
+          manager: manager || 'Chưa rõ',
           status: currentStatus || 'Chưa kiểm',
           barcode: rowBarcode
         };

@@ -1191,6 +1191,10 @@
             <span class="info-label">Trạng thái hiện tại</span>
             <div id="assetStatus" class="info-value"></div>
           </div>
+          <div class="info-item">
+            <span class="info-label">Người quản lý</span>
+            <div id="assetManager" class="info-value"></div>
+          </div>
         </div>
         <button id="btnConfirm" class="btn-confirm" onclick="confirmScan()">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
@@ -1492,6 +1496,7 @@
       currentAssetRow = asset.row;
       document.getElementById('assetName').innerText = asset.assetName;
       document.getElementById('barcodeValue').innerText = asset.barcode;
+      document.getElementById('assetManager').innerText = asset.manager || 'Chưa rõ';
       const isChecked = String(asset.status).trim() === 'Đã kiểm';
       document.getElementById('assetStatus').innerHTML = isChecked
         ? '<span class="status-badge status-checked">Đã kiểm</span>'
