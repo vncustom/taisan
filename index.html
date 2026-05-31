@@ -186,10 +186,12 @@
       display: flex;
       justify-content: center;
       gap: 12px;
+      z-index: 50;
+      pointer-events: none; /* Let the container pass clicks */
     }
 
     .cam-btn {
-      pointer-events: auto;
+      pointer-events: auto; /* Buttons themselves receive clicks */
       background: rgba(15, 23, 42, 0.7);
       border: 1px solid var(--glass-border);
       border-radius: 50%;
@@ -202,6 +204,10 @@
       color: white;
       backdrop-filter: blur(6px);
       transition: background 0.2s;
+    }
+
+    .cam-btn svg {
+      pointer-events: none;
     }
 
     .cam-btn:active {
@@ -1373,28 +1379,37 @@
     }
 
     // ---------- Flash ----------
-    function toggleFlash() {
+    async function toggleFlash() {
       const track = mediaStream && mediaStream.getVideoTracks()[0];
       if (!track) return;
-      const caps = track.getCapabilities ? track.getCapabilities() : {};
-      if (!caps.torch) { showToast('Thiết bị không hỗ trợ đèn flash', 'error'); return; }
-      flashOn = !flashOn;
-      track.applyConstraints({ advanced: [{ torch: flashOn }] });
-      document.getElementById('btnFlash').classList.toggle('on', flashOn);
+      try {
+        flashOn = !flashOn;
+        await track.applyConstraints({ advanced: [{ torch: flashOn }] });
+        document.getElementById('btnFlash').classList.toggle('on', flashOn);
+      } catch (err) {
+        flashOn = !flashOn; // revert
+        showToast('Không thể bật đèn flash (thiết bị không hỗ trợ)', 'error');
+      }
     }
 
     // ---------- Zoom ×2 ----------
-    function toggleZoom() {
+    async function toggleZoom() {
       const track = mediaStream && mediaStream.getVideoTracks()[0];
       if (!track) return;
       const caps = track.getCapabilities ? track.getCapabilities() : {};
       if (!caps.zoom) { showToast('Thiết bị không hỗ trợ zoom phần cứng', 'error'); return; }
+      
       isZoomed = !isZoomed;
       const zoomVal = isZoomed
         ? Math.min(caps.zoom.max, caps.zoom.min + (caps.zoom.max - caps.zoom.min) * 0.5)
         : caps.zoom.min;
-      track.applyConstraints({ advanced: [{ zoom: zoomVal }] });
-      document.getElementById('btnZoom').classList.toggle('on', isZoomed);
+      try {
+        await track.applyConstraints({ advanced: [{ zoom: zoomVal }] });
+        document.getElementById('btnZoom').classList.toggle('on', isZoomed);
+      } catch (err) {
+        isZoomed = !isZoomed;
+        showToast('Lỗi khi zoom', 'error');
+      }
     }
 
     // ---------- Manual input ----------
