@@ -1238,6 +1238,8 @@
     const badge = document.getElementById('engineBadge');
 
     // ---------- Camera Start ----------
+    let cameraTrack = null; // Global reference to video track for flash/zoom
+
     async function startCamera() {
       try {
         // Request highest-res rear camera with continuous autofocus
@@ -1254,8 +1256,14 @@
         video.srcObject = mediaStream;
         await video.play();
 
+        // Store track reference for flash/zoom
+        cameraTrack = mediaStream.getVideoTracks()[0];
+
         // Try to enable continuous autofocus via track capabilities
         applyAdvancedCameraSettings();
+
+        // Check and update flash/zoom button visibility
+        updateCameraControlButtons();
 
         // Show overlay, hide prompt
         overlay.style.display = 'block';
@@ -1273,10 +1281,8 @@
     }
 
     function applyAdvancedCameraSettings() {
-      if (!mediaStream) return;
-      const track = mediaStream.getVideoTracks()[0];
-      if (!track) return;
-      const caps = track.getCapabilities ? track.getCapabilities() : {};
+      if (!cameraTrack) return;
+      const caps = cameraTrack.getCapabilities ? cameraTrack.getCapabilities() : {};
 
       const constraints = {};
       // Continuous autofocus
@@ -1284,7 +1290,29 @@
         constraints.focusMode = 'continuous';
       }
       if (Object.keys(constraints).length) {
-        track.applyConstraints({ advanced: [constraints] }).catch(() => { });
+        cameraTrack.applyConstraints({ advanced: [constraints] }).catch(() => { });
+      }
+    }
+
+    function updateCameraControlButtons() {
+      if (!cameraTrack) return;
+      const caps = cameraTrack.getCapabilities ? cameraTrack.getCapabilities() : {};
+      const btnFlash = document.getElementById('btnFlash');
+      const btnZoom = document.getElementById('btnZoom');
+      // Show/dim buttons based on device capability
+      if (!caps.torch) {
+        btnFlash.style.opacity = '0.35';
+        btnFlash.title = 'Flash không khả dụng trên thiết bị này';
+      } else {
+        btnFlash.style.opacity = '1';
+        btnFlash.title = 'Bật/tắt đèn flash';
+      }
+      if (!caps.zoom) {
+        btnZoom.style.opacity = '0.35';
+        btnZoom.title = 'Zoom không khả dụng trên thiết bị này';
+      } else {
+        btnZoom.style.opacity = '1';
+        btnZoom.title = 'Phóng to ×2';
       }
     }
 
@@ -1360,7 +1388,12 @@
     function stopCamera() {
       if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
       if (zxingReader) { zxingReader.reset(); zxingReader = null; }
+      // Turn off flash before stopping tracks
+      if (cameraTrack && flashOn) {
+        try { cameraTrack.applyConstraints({ advanced: [{ torch: false }] }); } catch(_) {}
+      }
       if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+      cameraTrack = null;
       video.srcObject = null;
       overlay.style.display = 'none';
       prompt.style.display = 'flex';
@@ -1372,28 +1405,50 @@
     }
 
     // ---------- Flash ----------
-    function toggleFlash() {
-      const track = mediaStream && mediaStream.getVideoTracks()[0];
-      if (!track) return;
-      const caps = track.getCapabilities ? track.getCapabilities() : {};
-      if (!caps.torch) { showToast('Thiết bị không hỗ trợ đèn flash', 'error'); return; }
-      flashOn = !flashOn;
-      track.applyConstraints({ advanced: [{ torch: flashOn }] });
-      document.getElementById('btnFlash').classList.toggle('on', flashOn);
+    async function toggleFlash() {
+      if (!cameraTrack) {
+        showToast('📷 Hãy mở camera trước', 'error');
+        return;
+      }
+      const caps = cameraTrack.getCapabilities ? cameraTrack.getCapabilities() : {};
+      if (!caps.torch) {
+        showToast('⚠️ Thiết bị không hỗ trợ đèn flash', 'error');
+        return;
+      }
+      try {
+        flashOn = !flashOn;
+        await cameraTrack.applyConstraints({ advanced: [{ torch: flashOn }] });
+        document.getElementById('btnFlash').classList.toggle('on', flashOn);
+        showToast(flashOn ? '🔦 Đèn flash BẬT' : '🔦 Đèn flash TẮT', 'success');
+      } catch (err) {
+        flashOn = !flashOn; // revert state
+        showToast('❌ Không thể bật flash: ' + err.message, 'error');
+      }
     }
 
     // ---------- Zoom ×2 ----------
-    function toggleZoom() {
-      const track = mediaStream && mediaStream.getVideoTracks()[0];
-      if (!track) return;
-      const caps = track.getCapabilities ? track.getCapabilities() : {};
-      if (!caps.zoom) { showToast('Thiết bị không hỗ trợ zoom phần cứng', 'error'); return; }
-      isZoomed = !isZoomed;
-      const zoomVal = isZoomed
-        ? Math.min(caps.zoom.max, caps.zoom.min + (caps.zoom.max - caps.zoom.min) * 0.5)
-        : caps.zoom.min;
-      track.applyConstraints({ advanced: [{ zoom: zoomVal }] });
-      document.getElementById('btnZoom').classList.toggle('on', isZoomed);
+    async function toggleZoom() {
+      if (!cameraTrack) {
+        showToast('📷 Hãy mở camera trước', 'error');
+        return;
+      }
+      const caps = cameraTrack.getCapabilities ? cameraTrack.getCapabilities() : {};
+      if (!caps.zoom) {
+        showToast('⚠️ Thiết bị không hỗ trợ zoom phần cứng', 'error');
+        return;
+      }
+      try {
+        isZoomed = !isZoomed;
+        const zoomVal = isZoomed
+          ? Math.min(caps.zoom.max, caps.zoom.min + (caps.zoom.max - caps.zoom.min) * 0.5)
+          : caps.zoom.min;
+        await cameraTrack.applyConstraints({ advanced: [{ zoom: zoomVal }] });
+        document.getElementById('btnZoom').classList.toggle('on', isZoomed);
+        showToast(isZoomed ? '🔍 Zoom ×2 BẬT' : '🔍 Zoom TẮT', 'success');
+      } catch (err) {
+        isZoomed = !isZoomed; // revert state
+        showToast('❌ Không thể zoom: ' + err.message, 'error');
+      }
     }
 
     // ---------- Manual input ----------
