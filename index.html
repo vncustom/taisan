@@ -1641,80 +1641,356 @@
       event.target.value = '';
     }
 
-    async function decodeFromImage(imgEl) {
-      // Draw image to canvas for detection
-      const canvas = document.createElement('canvas');
-      canvas.width = imgEl.naturalWidth;
-      canvas.height = imgEl.naturalHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(imgEl, 0, 0);
+    // ============================================================
+    //  ROBUST IMAGE BARCODE/QR DECODER WITH PREPROCESSING
+    // ============================================================
 
+    const BARCODE_FORMATS_NATIVE = ['code_128', 'ean_13', 'ean_8', 'code_39', 'qr_code', 'data_matrix', 'itf', 'codabar'];
+
+    // -- Canvas preprocessing utilities --
+
+    /** Create a canvas from an image, optionally resized */
+    function imgToCanvas(imgEl, scale = 1) {
+      const w = Math.round(imgEl.naturalWidth * scale);
+      const h = Math.round(imgEl.naturalHeight * scale);
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(imgEl, 0, 0, w, h);
+      return c;
+    }
+
+    /** Crop a canvas to a sub-region (ratios 0-1) */
+    function cropCanvas(srcCanvas, rx, ry, rw, rh) {
+      const sx = Math.round(srcCanvas.width * rx);
+      const sy = Math.round(srcCanvas.height * ry);
+      const sw = Math.round(srcCanvas.width * rw);
+      const sh = Math.round(srcCanvas.height * rh);
+      const c = document.createElement('canvas');
+      c.width = sw; c.height = sh;
+      c.getContext('2d').drawImage(srcCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+      return c;
+    }
+
+    /** Convert canvas to grayscale in-place */
+    function grayscale(canvas) {
+      const ctx = canvas.getContext('2d');
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+        d[i] = d[i + 1] = d[i + 2] = g;
+      }
+      ctx.putImageData(img, 0, 0);
+      return canvas;
+    }
+
+    /** Enhance contrast via histogram stretching */
+    function stretchContrast(canvas) {
+      const ctx = canvas.getContext('2d');
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const d = img.data;
+      let lo = 255, hi = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i] < lo) lo = d[i];
+        if (d[i] > hi) hi = d[i];
+      }
+      if (hi - lo < 10) return canvas; // already flat
+      const range = hi - lo;
+      for (let i = 0; i < d.length; i += 4) {
+        const v = Math.round(((d[i] - lo) / range) * 255);
+        d[i] = d[i + 1] = d[i + 2] = v;
+      }
+      ctx.putImageData(img, 0, 0);
+      return canvas;
+    }
+
+    /** Sharpen using unsharp mask (3×3 convolution) */
+    function sharpen(canvas, amount = 1.5) {
+      const ctx = canvas.getContext('2d');
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const d = img.data;
+      const w = canvas.width, h = canvas.height;
+      const copy = new Uint8ClampedArray(d);
+
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          const idx = (y * w + x) * 4;
+          // 3×3 average of surrounding pixels
+          let sum = 0;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              sum += copy[((y + dy) * w + (x + dx)) * 4];
+            }
+          }
+          const blur = sum / 9;
+          const sharp = Math.round(copy[idx] + (copy[idx] - blur) * amount);
+          const v = Math.max(0, Math.min(255, sharp));
+          d[idx] = d[idx + 1] = d[idx + 2] = v;
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+      return canvas;
+    }
+
+    /** Binary threshold at a given cutoff */
+    function threshold(canvas, cutoff) {
+      const c = cloneCanvas(canvas);
+      const ctx = c.getContext('2d');
+      const img = ctx.getImageData(0, 0, c.width, c.height);
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const v = d[i] >= cutoff ? 255 : 0;
+        d[i] = d[i + 1] = d[i + 2] = v;
+      }
+      ctx.putImageData(img, 0, 0);
+      return c;
+    }
+
+    /** Adaptive threshold using local mean (blockSize × blockSize) */
+    function adaptiveThreshold(canvas, blockSize = 31, C = 10) {
+      const c = cloneCanvas(canvas);
+      const ctx = c.getContext('2d');
+      const img = ctx.getImageData(0, 0, c.width, c.height);
+      const d = img.data;
+      const w = c.width, h = c.height;
+      const src = new Uint8ClampedArray(d);
+      const half = Math.floor(blockSize / 2);
+
+      // Build integral image for fast local mean
+      const integral = new Float64Array((w + 1) * (h + 1));
+      for (let y = 0; y < h; y++) {
+        let rowSum = 0;
+        for (let x = 0; x < w; x++) {
+          rowSum += src[(y * w + x) * 4];
+          integral[(y + 1) * (w + 1) + (x + 1)] = integral[y * (w + 1) + (x + 1)] + rowSum;
+        }
+      }
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const x1 = Math.max(0, x - half), y1 = Math.max(0, y - half);
+          const x2 = Math.min(w - 1, x + half), y2 = Math.min(h - 1, y + half);
+          const count = (x2 - x1 + 1) * (y2 - y1 + 1);
+          const sum = integral[(y2 + 1) * (w + 1) + (x2 + 1)]
+                    - integral[y1 * (w + 1) + (x2 + 1)]
+                    - integral[(y2 + 1) * (w + 1) + x1]
+                    + integral[y1 * (w + 1) + x1];
+          const localMean = sum / count;
+          const idx = (y * w + x) * 4;
+          const v = src[idx] > (localMean - C) ? 255 : 0;
+          d[idx] = d[idx + 1] = d[idx + 2] = v;
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+      return c;
+    }
+
+    /** Clone a canvas */
+    function cloneCanvas(src) {
+      const c = document.createElement('canvas');
+      c.width = src.width; c.height = src.height;
+      c.getContext('2d').drawImage(src, 0, 0);
+      return c;
+    }
+
+    /** Invert colors of a canvas */
+    function invertCanvas(canvas) {
+      const c = cloneCanvas(canvas);
+      const ctx = c.getContext('2d');
+      const img = ctx.getImageData(0, 0, c.width, c.height);
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        d[i] = 255 - d[i];
+        d[i + 1] = 255 - d[i + 1];
+        d[i + 2] = 255 - d[i + 2];
+      }
+      ctx.putImageData(img, 0, 0);
+      return c;
+    }
+
+    // -- Detection attempts --
+
+    /** Try Native BarcodeDetector on a canvas */
+    async function tryNativeDetect(canvas) {
+      if (!('BarcodeDetector' in window)) return null;
+      try {
+        const detector = new BarcodeDetector({ formats: BARCODE_FORMATS_NATIVE });
+        const codes = await detector.detect(canvas);
+        return codes.length > 0 ? codes[0].rawValue : null;
+      } catch (e) { return null; }
+    }
+
+    /** Try ZXing BrowserMultiFormatReader on a canvas (via data URL) */
+    async function tryZxingDetect(canvas) {
+      if (!window.ZXing) return null;
+      try {
+        const ZX = window.ZXing;
+        const hints = new Map();
+        hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [
+          ZX.BarcodeFormat.CODE_128, ZX.BarcodeFormat.EAN_13,
+          ZX.BarcodeFormat.EAN_8, ZX.BarcodeFormat.CODE_39,
+          ZX.BarcodeFormat.QR_CODE, ZX.BarcodeFormat.DATA_MATRIX,
+          ZX.BarcodeFormat.ITF,
+        ]);
+        hints.set(ZX.DecodeHintType.TRY_HARDER, true);
+        hints.set(ZX.DecodeHintType.CHARACTER_SET, 'UTF-8');
+
+        const reader = new ZX.BrowserMultiFormatReader(hints);
+        const result = await reader.decodeFromImage(undefined, canvas.toDataURL('image/png'));
+        return result ? result.getText() : null;
+      } catch (e) { return null; }
+    }
+
+    /** Try both engines on a canvas, return first success */
+    async function tryBothEngines(canvas) {
+      // Try native first (faster)
+      let code = await tryNativeDetect(canvas);
+      if (code) return code;
+      // Fallback to ZXing
+      code = await tryZxingDetect(canvas);
+      return code;
+    }
+
+    // -- Main decode pipeline --
+
+    async function decodeFromImage(imgEl) {
+      const statusEl = document.querySelector('.upload-status');
       let foundCode = null;
 
-      // Try Native BarcodeDetector first
-      if ('BarcodeDetector' in window) {
-        try {
-          const detector = new BarcodeDetector({
-            formats: ['code_128', 'ean_13', 'ean_8', 'code_39', 'qr_code', 'data_matrix', 'itf', 'codabar']
-          });
-          const codes = await detector.detect(canvas);
-          if (codes.length > 0) {
-            foundCode = codes[0].rawValue;
-          }
-        } catch (e) {
-          console.warn('Native BarcodeDetector failed on image:', e);
+      // ── Pass 1: Original image (multiple scales) ──
+      statusEl.textContent = 'Đang quét ảnh gốc…';
+      const scales = [1];
+      // Add upscale for small images, downscale for very large ones
+      const origW = imgEl.naturalWidth;
+      if (origW < 800) scales.push(2, 3);
+      else if (origW < 1200) scales.push(1.5);
+      if (origW > 2000) scales.push(0.5);
+      if (origW > 3000) scales.push(0.33);
+
+      for (const scale of scales) {
+        if (foundCode) break;
+        const c = imgToCanvas(imgEl, scale);
+        foundCode = await tryBothEngines(c);
+      }
+
+      // ── Pass 2: Grayscale + contrast stretch ──
+      if (!foundCode) {
+        statusEl.textContent = 'Tăng cường tương phản…';
+        for (const scale of [1, 1.5]) {
+          if (foundCode) break;
+          const c = stretchContrast(grayscale(imgToCanvas(imgEl, scale)));
+          foundCode = await tryBothEngines(c);
         }
       }
 
-      // Fallback to ZXing if native didn't find anything
-      if (!foundCode && window.ZXing) {
-        try {
-          const ZXingLib = window.ZXing;
-          const hints = new Map();
-          hints.set(ZXingLib.DecodeHintType.POSSIBLE_FORMATS, [
-            ZXingLib.BarcodeFormat.CODE_128,
-            ZXingLib.BarcodeFormat.EAN_13,
-            ZXingLib.BarcodeFormat.EAN_8,
-            ZXingLib.BarcodeFormat.CODE_39,
-            ZXingLib.BarcodeFormat.QR_CODE,
-            ZXingLib.BarcodeFormat.DATA_MATRIX,
-            ZXingLib.BarcodeFormat.ITF,
-          ]);
-          hints.set(ZXingLib.DecodeHintType.TRY_HARDER, true);
+      // ── Pass 3: Grayscale + contrast + sharpen ──
+      if (!foundCode) {
+        statusEl.textContent = 'Làm sắc nét ảnh…';
+        for (const amt of [1.5, 3]) {
+          if (foundCode) break;
+          const c = sharpen(stretchContrast(grayscale(imgToCanvas(imgEl, 1))), amt);
+          foundCode = await tryBothEngines(c);
+        }
+      }
 
-          const zxReader = new ZXingLib.BrowserMultiFormatReader(hints);
-          // decodeFromImage expects an HTMLImageElement or URL
-          const luminance = new ZXingLib.HTMLCanvasElementLuminanceSource(canvas);
-          const binarizer = new ZXingLib.HybridBinarizer(luminance);
-          const bitmap = new ZXingLib.BinaryBitmap(binarizer);
-          const multiReader = new ZXingLib.MultiFormatReader();
-          multiReader.setHints(hints);
-          const result = multiReader.decode(bitmap);
-          if (result) {
-            foundCode = result.getText();
+      // ── Pass 4: Binary threshold at various levels ──
+      if (!foundCode) {
+        statusEl.textContent = 'Thử ngưỡng nhị phân…';
+        const base = stretchContrast(grayscale(imgToCanvas(imgEl, 1)));
+        for (const t of [100, 120, 140, 160, 180]) {
+          if (foundCode) break;
+          foundCode = await tryBothEngines(threshold(base, t));
+        }
+      }
+
+      // ── Pass 5: Adaptive threshold (handles uneven lighting) ──
+      if (!foundCode) {
+        statusEl.textContent = 'Adaptive threshold…';
+        const grayBase = grayscale(imgToCanvas(imgEl, 1));
+        for (const bs of [31, 51, 71]) {
+          if (foundCode) break;
+          foundCode = await tryBothEngines(adaptiveThreshold(grayBase, bs, 10));
+        }
+      }
+
+      // ── Pass 6: Inverted (white-on-black barcodes) ──
+      if (!foundCode) {
+        statusEl.textContent = 'Thử đảo màu…';
+        const inv = invertCanvas(stretchContrast(grayscale(imgToCanvas(imgEl, 1))));
+        foundCode = await tryBothEngines(inv);
+      }
+
+      // ── Pass 7: Center crops (barcode is usually in center) ──
+      if (!foundCode) {
+        statusEl.textContent = 'Quét vùng trung tâm…';
+        const baseCanvas = imgToCanvas(imgEl, 1);
+        const crops = [
+          [0.1, 0.1, 0.8, 0.8],   // center 80%
+          [0.15, 0.2, 0.7, 0.6],  // tighter center
+          [0.05, 0.3, 0.9, 0.4],  // horizontal strip (for barcodes)
+          [0.0, 0.0, 1.0, 0.5],   // top half
+          [0.0, 0.5, 1.0, 0.5],   // bottom half
+          [0.2, 0.1, 0.6, 0.8],   // center column
+        ];
+        for (const [rx, ry, rw, rh] of crops) {
+          if (foundCode) break;
+          const cropped = cropCanvas(baseCanvas, rx, ry, rw, rh);
+          foundCode = await tryBothEngines(cropped);
+          if (!foundCode) {
+            // Also try the crop with preprocessing
+            const processed = sharpen(stretchContrast(grayscale(cropped)), 2);
+            foundCode = await tryBothEngines(processed);
           }
-        } catch (e) {
-          // ZXing low-level API might not be available, try alternative approach
-          try {
-            const ZXingLib = window.ZXing;
-            const zxReader = new ZXingLib.BrowserMultiFormatReader();
-            const result = await zxReader.decodeFromImage(undefined, canvas.toDataURL());
-            if (result) {
-              foundCode = result.getText();
+        }
+      }
+
+      // ── Pass 8: Upscaled crops with thresholding (last resort) ──
+      if (!foundCode) {
+        statusEl.textContent = 'Phóng to và lọc nhiễu…';
+        const crops = [
+          [0.05, 0.15, 0.9, 0.5],  // horizontal barcode band
+          [0.1, 0.1, 0.8, 0.8],
+        ];
+        for (const [rx, ry, rw, rh] of crops) {
+          if (foundCode) break;
+          const cropped = cropCanvas(imgToCanvas(imgEl, 1), rx, ry, rw, rh);
+          // Upscale the crop by 2×
+          const upscaled = document.createElement('canvas');
+          upscaled.width = cropped.width * 2;
+          upscaled.height = cropped.height * 2;
+          const uctx = upscaled.getContext('2d');
+          uctx.imageSmoothingEnabled = true;
+          uctx.imageSmoothingQuality = 'high';
+          uctx.drawImage(cropped, 0, 0, upscaled.width, upscaled.height);
+
+          grayscale(upscaled);
+          stretchContrast(upscaled);
+          sharpen(upscaled, 2);
+
+          foundCode = await tryBothEngines(upscaled);
+          if (!foundCode) {
+            for (const t of [110, 130, 150]) {
+              if (foundCode) break;
+              foundCode = await tryBothEngines(threshold(upscaled, t));
             }
-          } catch (e2) {
-            console.warn('ZXing fallback also failed:', e2);
+          }
+          if (!foundCode) {
+            foundCode = await tryBothEngines(adaptiveThreshold(upscaled, 41, 12));
           }
         }
       }
 
+      // ── Result ──
       if (foundCode) {
         vibrate();
         showToast('✓ Tìm thấy mã: ' + foundCode, 'success');
         lastScannedCode = null;
         lookupAsset(foundCode);
       } else {
-        showToast('❌ Không tìm thấy mã QR/barcode trong ảnh', 'error');
+        showToast('❌ Không tìm thấy mã QR/barcode trong ảnh. Thử chụp rõ hơn.', 'error');
       }
     }
 
