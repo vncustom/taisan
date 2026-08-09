@@ -1225,6 +1225,131 @@
     #btnNewscan:active {
       transform: translateX(-50%) scale(0.96);
     }
+
+    /* ── Relocate button ── */
+    .btn-relocate {
+      margin-top: 0.75rem;
+      width: 100%;
+      background: linear-gradient(to right, #0ea5e9, #6366f1);
+      color: white;
+      border: none;
+      border-radius: 16px;
+      padding: 1rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(14, 165, 233, 0.3);
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .btn-relocate:active { transform: scale(0.98); }
+    .btn-relocate:disabled { opacity: 0.5; cursor: not-allowed; background: #475569; }
+
+    /* ── Relocate Modal ── */
+    #relocateModal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(6px);
+      z-index: 3000;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    #relocateModal.open { display: flex; }
+
+    .relocate-card {
+      background: #1e293b;
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 1.8rem 1.5rem;
+      width: 100%;
+      max-width: 420px;
+      animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .relocate-card h3 {
+      margin: 0 0 0.3rem;
+      font-size: 1.05rem;
+      font-weight: 700;
+      background: linear-gradient(to right, #38bdf8, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .relocate-card .cur-loc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 1.2rem;
+    }
+
+    .relocate-card .cur-loc span {
+      color: #f8fafc;
+      font-weight: 600;
+    }
+
+    #newLocationInput {
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 0.85rem 1rem;
+      color: white;
+      font-family: inherit;
+      font-size: 1rem;
+      outline: none;
+      margin-bottom: 1rem;
+      transition: all 0.2s;
+      box-sizing: border-box;
+    }
+
+    #newLocationInput:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.12);
+    }
+
+    .relocate-btns {
+      display: flex;
+      gap: 0.6rem;
+    }
+
+    .btn-rel-cancel {
+      flex: 1;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 0.85rem;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-rel-cancel:hover { background: rgba(255,255,255,0.12); color: white; }
+
+    .btn-rel-confirm {
+      flex: 2;
+      background: linear-gradient(to right, #0ea5e9, #6366f1);
+      border: none;
+      border-radius: 12px;
+      padding: 0.85rem;
+      color: white;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-rel-confirm:active { transform: scale(0.97); }
   </style>
 </head>
 
@@ -1394,6 +1519,13 @@
           </svg>
           Xác nhận Đã kiểm
         </button>
+        <button id="btnRelocate" class="btn-relocate" onclick="openRelocateModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+            <circle cx="12" cy="9" r="2.5"/>
+          </svg>
+          Đổi vị trí
+        </button>
       </div>
     </div>
   </main>
@@ -1404,6 +1536,25 @@
   </div>
   <div id="toast"></div>
   <button id="btnNewscan" onclick="registerNewscan()">📋 Khai báo mới?</button>
+
+  <!-- ════ RELOCATE MODAL ════ -->
+  <div id="relocateModal">
+    <div class="relocate-card">
+      <h3>📍 Đổi vị trí tài sản</h3>
+      <div class="cur-loc">Vị trí hiện tại: <span id="curLocDisplay">—</span></div>
+      <input type="text" id="newLocationInput" placeholder="Nhập vị trí mới…" onkeydown="if(event.key==='Enter') submitRelocate()">
+      <div class="relocate-btns">
+        <button class="btn-rel-cancel" onclick="closeRelocateModal()">Huỷ</button>
+        <button class="btn-rel-confirm" onclick="submitRelocate()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;vertical-align:middle">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+            <circle cx="12" cy="9" r="2.5"/>
+          </svg>
+          Lưu vị trí mới
+        </button>
+      </div>
+    </div>
+  </div>
 
   <script>
     // ================================================================
@@ -1606,6 +1757,8 @@
     function handleImageUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
+
+      _uploadedFile = file; // lưu file để dùng cho Gemini
 
       const uploadArea = document.getElementById('uploadArea');
       const placeholder = document.getElementById('uploadPlaceholder');
@@ -1856,142 +2009,119 @@
 
     // -- Main decode pipeline --
 
+    // ============================================================
+    //  GEMINI VISION: đọc mã tài sản từ ảnh qua GAS
+    // ============================================================
+
+    // Lưu file ảnh gốc để truyền base64 lên GAS
+    let _uploadedFile = null;
+
     async function decodeFromImage(imgEl) {
       const statusEl = document.querySelector('.upload-status');
+
+      // ── Bước 1: Thử BarcodeDetector / ZXing nội bộ trước (nhanh hơn) ──
+      statusEl.textContent = 'Đang quét mã nội bộ…';
       let foundCode = null;
 
-      // ── Pass 1: Original image (multiple scales) ──
-      statusEl.textContent = 'Đang quét ảnh gốc…';
-      const scales = [1];
-      // Add upscale for small images, downscale for very large ones
-      const origW = imgEl.naturalWidth;
-      if (origW < 800) scales.push(2, 3);
-      else if (origW < 1200) scales.push(1.5);
-      if (origW > 2000) scales.push(0.5);
-      if (origW > 3000) scales.push(0.33);
+      // Thử ảnh gốc
+      const c0 = imgToCanvas(imgEl, 1);
+      foundCode = await tryBothEngines(c0);
 
-      for (const scale of scales) {
-        if (foundCode) break;
-        const c = imgToCanvas(imgEl, scale);
-        foundCode = await tryBothEngines(c);
-      }
-
-      // ── Pass 2: Grayscale + contrast stretch ──
+      // Thử grayscale + contrast nếu chưa tìm thấy
       if (!foundCode) {
         statusEl.textContent = 'Tăng cường tương phản…';
-        for (const scale of [1, 1.5]) {
-          if (foundCode) break;
-          const c = stretchContrast(grayscale(imgToCanvas(imgEl, scale)));
-          foundCode = await tryBothEngines(c);
-        }
+        const cGray = stretchContrast(grayscale(imgToCanvas(imgEl, 1)));
+        foundCode = await tryBothEngines(cGray);
       }
 
-      // ── Pass 3: Grayscale + contrast + sharpen ──
-      if (!foundCode) {
-        statusEl.textContent = 'Làm sắc nét ảnh…';
-        for (const amt of [1.5, 3]) {
-          if (foundCode) break;
-          const c = sharpen(stretchContrast(grayscale(imgToCanvas(imgEl, 1))), amt);
-          foundCode = await tryBothEngines(c);
-        }
-      }
-
-      // ── Pass 4: Binary threshold at various levels ──
-      if (!foundCode) {
-        statusEl.textContent = 'Thử ngưỡng nhị phân…';
-        const base = stretchContrast(grayscale(imgToCanvas(imgEl, 1)));
-        for (const t of [100, 120, 140, 160, 180]) {
-          if (foundCode) break;
-          foundCode = await tryBothEngines(threshold(base, t));
-        }
-      }
-
-      // ── Pass 5: Adaptive threshold (handles uneven lighting) ──
-      if (!foundCode) {
-        statusEl.textContent = 'Adaptive threshold…';
-        const grayBase = grayscale(imgToCanvas(imgEl, 1));
-        for (const bs of [31, 51, 71]) {
-          if (foundCode) break;
-          foundCode = await tryBothEngines(adaptiveThreshold(grayBase, bs, 10));
-        }
-      }
-
-      // ── Pass 6: Inverted (white-on-black barcodes) ──
-      if (!foundCode) {
-        statusEl.textContent = 'Thử đảo màu…';
-        const inv = invertCanvas(stretchContrast(grayscale(imgToCanvas(imgEl, 1))));
-        foundCode = await tryBothEngines(inv);
-      }
-
-      // ── Pass 7: Center crops (barcode is usually in center) ──
-      if (!foundCode) {
-        statusEl.textContent = 'Quét vùng trung tâm…';
-        const baseCanvas = imgToCanvas(imgEl, 1);
-        const crops = [
-          [0.1, 0.1, 0.8, 0.8],   // center 80%
-          [0.15, 0.2, 0.7, 0.6],  // tighter center
-          [0.05, 0.3, 0.9, 0.4],  // horizontal strip (for barcodes)
-          [0.0, 0.0, 1.0, 0.5],   // top half
-          [0.0, 0.5, 1.0, 0.5],   // bottom half
-          [0.2, 0.1, 0.6, 0.8],   // center column
-        ];
-        for (const [rx, ry, rw, rh] of crops) {
-          if (foundCode) break;
-          const cropped = cropCanvas(baseCanvas, rx, ry, rw, rh);
-          foundCode = await tryBothEngines(cropped);
-          if (!foundCode) {
-            // Also try the crop with preprocessing
-            const processed = sharpen(stretchContrast(grayscale(cropped)), 2);
-            foundCode = await tryBothEngines(processed);
-          }
-        }
-      }
-
-      // ── Pass 8: Upscaled crops with thresholding (last resort) ──
-      if (!foundCode) {
-        statusEl.textContent = 'Phóng to và lọc nhiễu…';
-        const crops = [
-          [0.05, 0.15, 0.9, 0.5],  // horizontal barcode band
-          [0.1, 0.1, 0.8, 0.8],
-        ];
-        for (const [rx, ry, rw, rh] of crops) {
-          if (foundCode) break;
-          const cropped = cropCanvas(imgToCanvas(imgEl, 1), rx, ry, rw, rh);
-          // Upscale the crop by 2×
-          const upscaled = document.createElement('canvas');
-          upscaled.width = cropped.width * 2;
-          upscaled.height = cropped.height * 2;
-          const uctx = upscaled.getContext('2d');
-          uctx.imageSmoothingEnabled = true;
-          uctx.imageSmoothingQuality = 'high';
-          uctx.drawImage(cropped, 0, 0, upscaled.width, upscaled.height);
-
-          grayscale(upscaled);
-          stretchContrast(upscaled);
-          sharpen(upscaled, 2);
-
-          foundCode = await tryBothEngines(upscaled);
-          if (!foundCode) {
-            for (const t of [110, 130, 150]) {
-              if (foundCode) break;
-              foundCode = await tryBothEngines(threshold(upscaled, t));
-            }
-          }
-          if (!foundCode) {
-            foundCode = await tryBothEngines(adaptiveThreshold(upscaled, 41, 12));
-          }
-        }
-      }
-
-      // ── Result ──
       if (foundCode) {
         vibrate();
         showToast('✓ Tìm thấy mã: ' + foundCode, 'success');
         lastScannedCode = null;
         lookupAsset(foundCode);
-      } else {
-        showToast('❌ Không tìm thấy mã QR/barcode trong ảnh. Thử chụp rõ hơn.', 'error');
+        return;
       }
+
+      // ── Bước 2: Gọi Gemini Vision qua GAS ──
+      statusEl.textContent = '🤖 Đang nhờ AI đọc mã…';
+
+      if (!_uploadedFile) {
+        showToast('❌ Không có file ảnh để gửi AI. Vui lòng chọn lại ảnh.', 'error');
+        return;
+      }
+
+      try {
+        const base64 = await fileToBase64(_uploadedFile);
+        const mimeType = _uploadedFile.type || 'image/jpeg';
+
+        // GAS không nhận JSONP POST với body lớn → gửi qua fetch trực tiếp đến Gemini từ browser
+        // nhưng vì CORS, ta vẫn phải gọi qua GAS. Dùng JSONP với base64 bị giới hạn URL length.
+        // → Gọi Gemini API trực tiếp từ browser (không qua GAS) để tránh giới hạn URL.
+        const geminiCode = await callGeminiDirect(base64, mimeType, statusEl);
+
+        if (geminiCode && geminiCode !== 'NOTFOUND') {
+          if (geminiCode === 'BARCODE' || geminiCode === 'QRCODE') {
+            showToast('🔍 AI thấy barcode/QR nhưng không đọc được số. Thử nhập tay.', 'error');
+          } else {
+            vibrate();
+            showToast('🤖 AI đọc được mã: ' + geminiCode, 'success');
+            lastScannedCode = null;
+            lookupAsset(geminiCode);
+          }
+        } else {
+          showToast('❌ AI không tìm thấy mã trong ảnh. Thử chụp rõ hơn.', 'error');
+        }
+      } catch (err) {
+        showToast('❌ Lỗi AI: ' + err.message, 'error');
+      }
+    }
+
+    /** Chuyển File thành base64 string (không có prefix data:) */
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          // e.target.result = "data:image/jpeg;base64,AAAA..."
+          const b64 = e.target.result.split(',')[1];
+          resolve(b64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    /**
+     * Gọi Gemini API trực tiếp từ browser (fetch).
+     * Cần GEMINI_API_KEY lưu trong Script Properties của GAS,
+     * nhưng vì browser không có key, ta lấy key qua GAS rồi cache.
+     * → Thay vào đó gọi action 'readImageBarcode' trên GAS qua fetch POST.
+     * GAS hỗ trợ POST → ta dùng fetch (không dùng JSONP vì body quá lớn).
+     */
+    async function callGeminiDirect(base64, mimeType, statusEl) {
+      statusEl.textContent = '🤖 Gửi ảnh lên AI…';
+
+      // Gọi GAS qua fetch POST (GAS doPost hoặc dùng doGet với query nhỏ)
+      // Vì ảnh có thể lớn → gọi Gemini trực tiếp với key lấy từ meta tag hoặc
+      // ta dùng action readImageBarcode qua fetch POST đến GAS
+      const formData = new FormData();
+      formData.append('action', 'readImageBarcode');
+      formData.append('imageBase64', base64);
+      formData.append('mimeType', mimeType);
+
+      // GAS doGet không nhận body POST → phải dùng fetch GET với params
+      // Nhưng base64 quá dài cho URL query → gọi Gemini trực tiếp từ browser
+      // Ta lấy API key bằng cách gọi GAS action getGeminiKey (cần thêm vào GAS)
+      // Để đơn giản: gọi GAS action readImageBarcode qua fetch POST
+      const resp = await fetch(GAS_URL, {
+        method: 'POST',
+        body: formData,
+        redirect: 'follow'
+      });
+      const text = await resp.text();
+      // GAS trả về JSON khi POST (không dùng JSONP)
+      const json = JSON.parse(text);
+      if (json.success) return json.code;
+      throw new Error(json.error || 'Lỗi không xác định từ AI');
     }
 
     function clearUpload() {
@@ -2098,8 +2228,11 @@
     }
 
     // ---------- UI helpers ----------
+    let _currentLocation = '';
+
     function displayResult(asset) {
       currentAssetRow = asset.row;
+      _currentLocation = asset.location || '';
       document.getElementById('assetName').innerText = asset.assetName;
       document.getElementById('barcodeValue').innerText = asset.barcode;
       document.getElementById('assetManager').innerText = asset.manager || 'Chưa rõ';
@@ -2110,6 +2243,38 @@
       document.getElementById('btnConfirm').disabled = isChecked;
       document.getElementById('result').style.display = 'block';
       if (isChecked) scanPaused = false; // already done, let camera scan next item
+    }
+
+    // ---------- Relocate ----------
+    function openRelocateModal() {
+      if (!currentAssetRow) return;
+      document.getElementById('curLocDisplay').textContent = _currentLocation || '(Chưa có vị trí)';
+      document.getElementById('newLocationInput').value = '';
+      document.getElementById('relocateModal').classList.add('open');
+      setTimeout(() => document.getElementById('newLocationInput').focus(), 150);
+    }
+
+    function closeRelocateModal() {
+      document.getElementById('relocateModal').classList.remove('open');
+    }
+
+    function submitRelocate() {
+      const newLoc = document.getElementById('newLocationInput').value.trim();
+      if (!newLoc) { showToast('⚠️ Vui lòng nhập vị trí mới', 'error'); return; }
+      if (!currentAssetRow) return;
+
+      closeRelocateModal();
+      showLoading(true);
+
+      callGAS({ action: 'relocate', row: currentAssetRow, newLocation: newLoc }, (res) => {
+        showLoading(false);
+        if (res && res.success) {
+          _currentLocation = res.newLocation;
+          showToast('✅ Đã cập nhật vị trí: ' + res.newLocation, 'success');
+        } else {
+          showToast('❌ ' + ((res && res.error) ? res.error : 'Lỗi cập nhật vị trí'), 'error');
+        }
+      });
     }
 
     function showLoading(show) {

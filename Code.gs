@@ -16,6 +16,11 @@ function doGet(e) {
       result = getManagerAssets(e.parameter.manager);
     } else if (action === 'newscan') {
       result = recordNewscan(e.parameter.barcode);
+    } else if (action === 'relocate') {
+      const row = parseInt(e.parameter.row);
+      result = relocateAsset(row, e.parameter.newLocation);
+    } else if (action === 'readImageBarcode') {
+      result = readBarcodeWithGemini(e.parameter.imageBase64, e.parameter.mimeType);
     }
     
     // Xử lý JSONP nếu có callback parameter (giải quyết CORS cho GitHub Pages)
@@ -34,6 +39,27 @@ function doGet(e) {
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('Kiểm Kê Tài Sản')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+/**
+ * Xử lý POST request từ browser (dùng cho Gemini image reading với base64 lớn).
+ * Browser gọi fetch POST đến GAS URL.
+ */
+function doPost(e) {
+  let result = { success: false, error: 'Action không hợp lệ' };
+  try {
+    const params = e.parameter || {};
+    const action = params.action;
+    if (action === 'readImageBarcode') {
+      result = readBarcodeWithGemini(params.imageBase64, params.mimeType);
+    } else if (action === 'relocate') {
+      result = relocateAsset(parseInt(params.row), params.newLocation);
+    }
+  } catch (err) {
+    result = { success: false, error: err.message };
+  }
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /**
@@ -64,6 +90,7 @@ function lookupBarcode(barcode) {
       if (rowBarcode === String(barcode).trim() && rowBarcode !== '') {
         const assetName = data[i][5];
         const manager = data[i][11];
+        const location = data[i][12];
         const currentStatus = data[i][21];
         const actualRow = startRow + i;
         
@@ -72,6 +99,7 @@ function lookupBarcode(barcode) {
           row: actualRow,
           assetName: assetName,
           manager: manager || 'Chưa rõ',
+          location: location || '',
           status: currentStatus || 'Chưa kiểm',
           barcode: rowBarcode
         };
@@ -290,6 +318,99 @@ function recordNewscan(barcode) {
 
     sheet.appendRow([String(barcode).trim(), scanDate]);
     return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Gọi Gemini Vision API để đọc mã tài sản từ ảnh.
+ * imageBase64: chuỗi base64 của ảnh (không có data URI prefix).
+ * mimeType: 'image/jpeg', 'image/png', v.v.
+ */
+function readBarcodeWithGemini(imageBase64, mimeType) {
+  if (!imageBase64) return { success: false, error: 'Thiếu dữ liệu ảnh' };
+
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) return { success: false, error: 'Chưa cấu hình GEMINI_API_KEY trong Script Properties' };
+
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=' + apiKey;
+
+  const prompt = `Hãy đọc ảnh này và tìm mã tài sản. Mã tài sản thường là:
+- Chuỗi số như 3010101088001001
+- Hoặc bắt đầu bằng chữ rồi tới số như PHOTOS00040001
+Mã thường nằm ngay bên dưới barcode hoặc QR code.
+Nếu tìm thấy, chỉ trả về MÃ ĐÓ (không thêm gì khác).
+Nếu không thấy mã dạng trên nhưng thấy barcode/QR code, trả về "BARCODE" hoặc "QRCODE".
+Nếu không thấy gì, trả về "NOTFOUND".`;
+
+  const payload = {
+    contents: [{
+      parts: [
+        { text: prompt },
+        { inline_data: { mime_type: mimeType || 'image/jpeg', data: imageBase64 } }
+      ]
+    }],
+    generationConfig: { temperature: 0, maxOutputTokens: 64 }
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    const json = JSON.parse(response.getContentText());
+    if (json.error) return { success: false, error: json.error.message };
+    const candidate = ((json.candidates || [])[0] || {});
+    const rawText = ((candidate.content || {}).parts || [{}])[0].text || '';
+    const code = rawText.trim();
+    return { success: true, code: code };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * Đổi vị trí tài sản:
+ * - Ghi vị trí mới vào cột M (index 13)
+ * - Append lịch sử "vị trí cũ → ngày" vào cột X (index 24)
+ */
+function relocateAsset(row, newLocation) {
+  if (!row || !newLocation) return { success: false, error: 'Thiếu thông tin hàng hoặc vị trí mới' };
+
+  const sheetName = 'Chinh cho 3 phong';
+  const spreadsheetId = '1iaLw6iQLnTMTtOTYJLanfoULWCrAOsTa33tubSpxRnQ';
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return { success: false, error: 'Hệ thống đang bận. Vui lòng thử lại.' };
+
+  try {
+    const sheet = SpreadsheetApp.openById(spreadsheetId).getSheetByName(sheetName);
+    const actualRow = parseInt(row);
+
+    // Đọc vị trí cũ ở cột M (cột 13)
+    const oldLocation = String(sheet.getRange(actualRow, 13).getValue()).trim();
+
+    const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+
+    // Ghi vị trí mới vào cột M
+    sheet.getRange(actualRow, 13).setValue(String(newLocation).trim());
+
+    // Append lịch sử vào cột X (cột 24)
+    // Format: "vị trí cũ → ngày"
+    if (oldLocation) {
+      const historyCell = sheet.getRange(actualRow, 24);
+      const existing = String(historyCell.getValue()).trim();
+      const newEntry = oldLocation + ' → ' + now;
+      const updated = existing ? existing + '\n' + newEntry : newEntry;
+      historyCell.setValue(updated);
+    }
+
+    return { success: true, newLocation: String(newLocation).trim(), oldLocation: oldLocation };
   } catch (e) {
     return { success: false, error: e.message };
   } finally {
