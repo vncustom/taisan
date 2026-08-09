@@ -336,7 +336,7 @@ function readBarcodeWithGemini(imageBase64, mimeType) {
   const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!apiKey) return { success: false, error: 'Chưa cấu hình GEMINI_API_KEY trong Script Properties' };
 
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=' + apiKey;
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=' + apiKey;
 
   const prompt = `Hãy đọc ảnh này và tìm mã tài sản. Mã tài sản thường là:
 - Chuỗi số như 3010101088001001
