@@ -218,6 +218,11 @@
       background: rgba(99, 102, 241, 0.8);
     }
 
+    /* Torch not advertised by the device — still tappable, just dimmed */
+    .cam-btn.unsupported {
+      opacity: 0.45;
+    }
+
     /* Engine badge */
     #engineBadge {
       position: absolute;
@@ -1572,6 +1577,9 @@
     let zxingReader = null;   // ZXing fallback instance
     let isZoomed = false;
     let flashOn = false;
+    let torchCapable = false;     // device advertises torch support
+    let flashBusy = false;        // guard against rapid double-taps
+    let currentConstraints = null; // last getUserMedia constraints (for re-acquire)
     let scanPaused = false;  // pause while lookup is running
 
     const video = document.getElementById('videoEl');
@@ -1592,12 +1600,16 @@
             advanced: [{ focusMode: 'continuous' }]
           }
         };
+        currentConstraints = constraints;
         mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = mediaStream;
         await video.play();
 
         // Try to enable continuous autofocus via track capabilities
         applyAdvancedCameraSettings();
+
+        // Detect torch/flash support (some Samsung devices expose it a bit late)
+        detectTorchSupport();
 
         // Show overlay, hide prompt
         overlay.style.display = 'block';
@@ -1708,22 +1720,122 @@
       prompt.style.display = 'flex';
       badge.textContent = 'Chờ camera…';
       badge.style.color = '';
-      isZoomed = false; flashOn = false;
+      isZoomed = false; flashOn = false; torchCapable = false; flashBusy = false;
       document.getElementById('btnZoom').classList.remove('on');
-      document.getElementById('btnFlash').classList.remove('on');
+      document.getElementById('btnFlash').classList.remove('on', 'unsupported');
     }
 
-    // ---------- Flash ----------
-    async function toggleFlash() {
-      const track = mediaStream && mediaStream.getVideoTracks()[0];
-      if (!track) return;
+    // ---------- Flash / Torch ----------
+
+    /** Read the torch capability from the live track, retrying briefly because
+     *  some devices (notably several Samsung models) populate getCapabilities()
+     *  a few hundred ms after the stream starts. */
+    async function detectTorchSupport() {
+      torchCapable = false;
+      const btn = document.getElementById('btnFlash');
+      for (let i = 0; i < 6; i++) {
+        const track = mediaStream && mediaStream.getVideoTracks()[0];
+        if (!track) break;
+        let caps = {};
+        try { caps = track.getCapabilities ? track.getCapabilities() : {}; } catch (_) { }
+        if (caps && caps.torch === true) { torchCapable = true; break; }
+        await new Promise(r => setTimeout(r, 200));
+      }
+      // Keep the button usable even when capabilities don't advertise torch —
+      // a "blind" applyConstraints still works on some browsers (e.g. Samsung
+      // Internet). Just show it as unavailable visually.
+      if (btn) btn.classList.toggle('unsupported', !torchCapable);
+    }
+
+    /** Try several constraint shapes; different engines accept different ones. */
+    async function setTorch(track, on) {
+      const shapes = [
+        { advanced: [{ torch: on }] },
+        { torch: on },
+        { advanced: [{ torch: on }], fillLightMode: on ? 'flash' : 'off' },
+      ];
+      let lastErr = null;
+      for (const shape of shapes) {
+        try {
+          await track.applyConstraints(shape);
+          // Verify when the device reports it; if it doesn't report torch in
+          // settings, assume success (no exception thrown).
+          let settings = {};
+          try { settings = track.getSettings ? track.getSettings() : {}; } catch (_) { }
+          if (!('torch' in settings) || settings.torch === on) return true;
+          lastErr = new Error('torch constraint not applied');
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      throw lastErr || new Error('torch unsupported');
+    }
+
+    /** Last-resort fallback: re-request the camera with torch baked into the
+     *  getUserMedia constraints. A handful of Samsung/Android builds only light
+     *  the LED when torch is set at stream-acquisition time. */
+    async function reacquireWithTorch(on) {
+      if (!on || !currentConstraints) return false;
+      const vid = Object.assign({}, currentConstraints.video, {
+        advanced: [...(currentConstraints.video.advanced || []), { torch: true }],
+      });
+      let newStream;
       try {
-        flashOn = !flashOn;
-        await track.applyConstraints({ advanced: [{ torch: flashOn }] });
-        document.getElementById('btnFlash').classList.toggle('on', flashOn);
+        newStream = await navigator.mediaDevices.getUserMedia({ video: vid });
+      } catch (_) {
+        return false;
+      }
+      const newTrack = newStream.getVideoTracks()[0];
+      let caps = {};
+      try { caps = newTrack.getCapabilities ? newTrack.getCapabilities() : {}; } catch (_) { }
+
+      // Swap the live track into the current stream / video element.
+      const oldTracks = mediaStream ? mediaStream.getVideoTracks() : [];
+      video.srcObject = newStream;
+      try { await video.play(); } catch (_) { }
+      oldTracks.forEach(t => t.stop());
+      mediaStream = newStream;
+
+      if (caps && caps.torch === true) {
+        try { await setTorch(newTrack, true); } catch (_) { }
+      }
+      // If ZXing is running it decodes from `video`, which we've just repointed,
+      // so no engine restart is needed.
+      return true;
+    }
+
+    async function toggleFlash() {
+      if (flashBusy) return;
+      const track = mediaStream && mediaStream.getVideoTracks()[0];
+      if (!track) { showToast('Camera chưa sẵn sàng', 'error'); return; }
+
+      flashBusy = true;
+      const btn = document.getElementById('btnFlash');
+      const target = !flashOn;
+      try {
+        try {
+          await setTorch(track, target);
+        } catch (primaryErr) {
+          // Retry once after a short delay — torch can fail if toggled too soon
+          // after the stream starts.
+          await new Promise(r => setTimeout(r, 300));
+          try {
+            await setTorch(mediaStream.getVideoTracks()[0], target);
+          } catch (retryErr) {
+            const ok = await reacquireWithTorch(target);
+            if (!ok) throw retryErr;
+          }
+        }
+        flashOn = target;
+        if (btn) {
+          btn.classList.toggle('on', flashOn);
+          btn.classList.remove('unsupported');
+        }
       } catch (err) {
-        flashOn = !flashOn; // revert
-        showToast('Không thể bật đèn flash (thiết bị không hỗ trợ)', 'error');
+        showToast('Thiết bị hoặc trình duyệt này không hỗ trợ bật đèn flash', 'error');
+        if (btn) btn.classList.add('unsupported');
+      } finally {
+        flashBusy = false;
       }
     }
 
@@ -1741,6 +1853,8 @@
       try {
         await track.applyConstraints({ advanced: [{ zoom: zoomVal }] });
         document.getElementById('btnZoom').classList.toggle('on', isZoomed);
+        // Some devices drop the torch when other constraints are re-applied.
+        if (flashOn) { try { await setTorch(track, true); } catch (_) { } }
       } catch (err) {
         isZoomed = !isZoomed;
         showToast('Lỗi khi zoom', 'error');
