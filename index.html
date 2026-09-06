@@ -1633,18 +1633,26 @@
     // ---------- Camera Start ----------
     async function startCamera() {
       try {
-        // Request highest-res rear camera with continuous autofocus
-        const constraints = {
+        // Request highest-res rear camera with continuous autofocus.
+        // Use exact:'environment' first — Samsung S24 (One UI 6.1+) sometimes
+        // only exposes torch when the rear camera is explicitly selected.
+        let constraints = {
           video: {
-            facingMode: { ideal: 'environment' },
+            facingMode: { exact: 'environment' },
             width: { ideal: 1920 },
             height: { ideal: 1080 },
-            focusMode: 'continuous',          // best-effort
+            focusMode: 'continuous',
             advanced: [{ focusMode: 'continuous' }]
           }
         };
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (_exactErr) {
+          // Fallback to ideal if exact fails (e.g. single-camera devices)
+          constraints.video.facingMode = { ideal: 'environment' };
+          mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+        }
         currentConstraints = constraints;
-        mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = mediaStream;
         await video.play();
 
@@ -1771,26 +1779,63 @@
     // ---------- Flash / Torch ----------
 
     /** Read the torch capability from the live track, retrying briefly because
-     *  some devices (notably several Samsung models) populate getCapabilities()
-     *  a few hundred ms after the stream starts. */
+     *  some devices (notably Samsung S24 / One UI 6.1+) populate
+     *  getCapabilities() significantly later after the stream starts.
+     *  Also checks ImageCapture API as a secondary detection path. */
     async function detectTorchSupport() {
       torchCapable = false;
       const btn = document.getElementById('btnFlash');
-      for (let i = 0; i < 6; i++) {
+
+      // Strategy 1: Poll getCapabilities() on the track (up to ~3 seconds)
+      for (let i = 0; i < 10; i++) {
         const track = mediaStream && mediaStream.getVideoTracks()[0];
         if (!track) break;
         let caps = {};
         try { caps = track.getCapabilities ? track.getCapabilities() : {}; } catch (_) { }
         if (caps && caps.torch === true) { torchCapable = true; break; }
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 300));
       }
-      // Keep the button usable even when capabilities don't advertise torch —
-      // a "blind" applyConstraints still works on some browsers (e.g. Samsung
-      // Internet). Just show it as unavailable visually.
-      if (btn) btn.classList.toggle('unsupported', !torchCapable);
+
+      // Strategy 2: Try ImageCapture API — Samsung S24 sometimes only reports
+      // torch/flash via getPhotoCapabilities() even when getCapabilities() is empty.
+      if (!torchCapable && typeof ImageCapture !== 'undefined') {
+        try {
+          const track = mediaStream && mediaStream.getVideoTracks()[0];
+          if (track) {
+            const ic = new ImageCapture(track);
+            const photoCaps = await ic.getPhotoCapabilities();
+            if (photoCaps && photoCaps.fillLightMode &&
+                (photoCaps.fillLightMode.includes('flash') || photoCaps.fillLightMode.length > 1)) {
+              torchCapable = true;
+            }
+          }
+        } catch (_) { }
+      }
+
+      // Strategy 3: On Android with rear camera, always treat torch as
+      // potentially available — some Samsung devices never report it in
+      // capabilities but applyConstraints({torch:true}) still works.
+      if (!torchCapable) {
+        const ua = navigator.userAgent || '';
+        const isAndroid = /android/i.test(ua);
+        const track = mediaStream && mediaStream.getVideoTracks()[0];
+        if (isAndroid && track) {
+          let settings = {};
+          try { settings = track.getSettings ? track.getSettings() : {}; } catch (_) { }
+          // If it's the rear camera, optimistically mark as capable
+          if (settings.facingMode === 'environment' || !settings.facingMode) {
+            torchCapable = true; // optimistic — toggleFlash will handle failure
+          }
+        }
+      }
+
+      // Never dim the button on Android — always let users try the flash
+      const isAndroid = /android/i.test(navigator.userAgent || '');
+      if (btn) btn.classList.toggle('unsupported', !torchCapable && !isAndroid);
     }
 
-    /** Try several constraint shapes; different engines accept different ones. */
+    /** Try several constraint shapes; different engines accept different ones.
+     *  Also uses ImageCapture API as fallback for Samsung S24. */
     async function setTorch(track, on) {
       const shapes = [
         { advanced: [{ torch: on }] },
@@ -1801,8 +1846,8 @@
       for (const shape of shapes) {
         try {
           await track.applyConstraints(shape);
-          // Verify when the device reports it; if it doesn't report torch in
-          // settings, assume success (no exception thrown).
+          // Verify: if the device reports torch in settings, check it matches.
+          // If it doesn't report torch at all, assume success (no exception).
           let settings = {};
           try { settings = track.getSettings ? track.getSettings() : {}; } catch (_) { }
           if (!('torch' in settings) || settings.torch === on) return true;
@@ -1811,14 +1856,37 @@
           lastErr = e;
         }
       }
+
+      // Fallback: try ImageCapture.grabFrame() with torch — on some Samsung
+      // devices, grabFrame after setting constraints triggers the LED.
+      if (on && typeof ImageCapture !== 'undefined') {
+        try {
+          await track.applyConstraints({ advanced: [{ torch: true }] });
+          const ic = new ImageCapture(track);
+          await ic.grabFrame(); // force the torch to activate on some devices
+          let settings = {};
+          try { settings = track.getSettings ? track.getSettings() : {}; } catch (_) { }
+          if (!('torch' in settings) || settings.torch === true) return true;
+        } catch (_) { }
+      }
+
       throw lastErr || new Error('torch unsupported');
     }
 
     /** Last-resort fallback: re-request the camera with torch baked into the
-     *  getUserMedia constraints. A handful of Samsung/Android builds only light
-     *  the LED when torch is set at stream-acquisition time. */
+     *  getUserMedia constraints. Samsung S24 and similar devices often only
+     *  light the LED when torch is set at stream-acquisition time. */
     async function reacquireWithTorch(on) {
       if (!on || !currentConstraints) return false;
+
+      // Stop existing stream first — Samsung S24 needs the camera hardware
+      // fully released before it will honour torch in a new getUserMedia call.
+      const oldTracks = mediaStream ? mediaStream.getVideoTracks() : [];
+      oldTracks.forEach(t => t.stop());
+
+      // Brief pause so the hardware is fully released
+      await new Promise(r => setTimeout(r, 200));
+
       const vid = Object.assign({}, currentConstraints.video, {
         advanced: [...(currentConstraints.video.advanced || []), { torch: true }],
       });
@@ -1826,22 +1894,26 @@
       try {
         newStream = await navigator.mediaDevices.getUserMedia({ video: vid });
       } catch (_) {
+        // If re-acquire fails, try to restore camera without torch
+        try {
+          newStream = await navigator.mediaDevices.getUserMedia(currentConstraints);
+          video.srcObject = newStream;
+          await video.play();
+          mediaStream = newStream;
+        } catch (__) { }
         return false;
       }
       const newTrack = newStream.getVideoTracks()[0];
-      let caps = {};
-      try { caps = newTrack.getCapabilities ? newTrack.getCapabilities() : {}; } catch (_) { }
 
       // Swap the live track into the current stream / video element.
-      const oldTracks = mediaStream ? mediaStream.getVideoTracks() : [];
       video.srcObject = newStream;
       try { await video.play(); } catch (_) { }
-      oldTracks.forEach(t => t.stop());
       mediaStream = newStream;
 
-      if (caps && caps.torch === true) {
-        try { await setTorch(newTrack, true); } catch (_) { }
-      }
+      // Give Samsung a moment then try to apply torch constraint explicitly
+      await new Promise(r => setTimeout(r, 300));
+      try { await setTorch(newTrack, true); } catch (_) { }
+
       // If ZXing is running it decodes from `video`, which we've just repointed,
       // so no engine restart is needed.
       return true;
@@ -1856,25 +1928,54 @@
       const btn = document.getElementById('btnFlash');
       const target = !flashOn;
       try {
+        let success = false;
+
+        // Attempt 1: Direct applyConstraints
         try {
           await setTorch(track, target);
+          success = true;
         } catch (primaryErr) {
-          // Retry once after a short delay — torch can fail if toggled too soon
-          // after the stream starts.
-          await new Promise(r => setTimeout(r, 300));
+          // Attempt 2: Retry after a short delay — Samsung S24 sometimes needs
+          // time between camera init and torch control.
+          await new Promise(r => setTimeout(r, 500));
           try {
             await setTorch(mediaStream.getVideoTracks()[0], target);
+            success = true;
           } catch (retryErr) {
-            const ok = await reacquireWithTorch(target);
-            if (!ok) throw retryErr;
+            // Attempt 3: Re-acquire the camera stream with torch baked in
+            // (Samsung S24 specific — only lights LED at stream-acquisition time)
+            if (target) {
+              const ok = await reacquireWithTorch(target);
+              if (ok) success = true;
+              else throw retryErr;
+            } else {
+              // Turning off: if applyConstraints fails, stop and re-acquire
+              // without torch — this is the only reliable "off" on Samsung S24
+              try {
+                const oldTracks = mediaStream ? mediaStream.getVideoTracks() : [];
+                oldTracks.forEach(t => t.stop());
+                await new Promise(r => setTimeout(r, 200));
+                const newStream = await navigator.mediaDevices.getUserMedia(currentConstraints);
+                video.srcObject = newStream;
+                await video.play();
+                mediaStream = newStream;
+                success = true;
+              } catch (__) {
+                throw retryErr;
+              }
+            }
           }
         }
-        flashOn = target;
-        if (btn) {
-          btn.classList.toggle('on', flashOn);
-          btn.classList.remove('unsupported');
+
+        if (success) {
+          flashOn = target;
+          if (btn) {
+            btn.classList.toggle('on', flashOn);
+            btn.classList.remove('unsupported');
+          }
         }
       } catch (err) {
+        console.warn('Flash toggle failed:', err);
         showToast('Thiết bị hoặc trình duyệt này không hỗ trợ bật đèn flash', 'error');
         if (btn) btn.classList.add('unsupported');
       } finally {
